@@ -130,6 +130,7 @@ export interface UpdateProfileRequest {
 
 export interface AuthStatus {
   github: boolean;
+  mfa: boolean;
   password: boolean;
 }
 
@@ -140,8 +141,13 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   success: boolean;
+  mfaRequired?: boolean;
   token?: string;
-  user: UserProfile;
+  user?: UserProfile;
+}
+
+export interface MfaVerificationRequest {
+  code: string;
 }
 
 // ============================================================================
@@ -327,6 +333,7 @@ export const API_PATHS = {
   // Auth
   AUTH_STATUS: '/api/auth/status',
   AUTH_LOGIN: '/api/auth/login',
+  AUTH_MFA_VERIFY: '/api/auth/mfa/verify',
 
   // User
   USER_PROFILE: '/api/user/profile',

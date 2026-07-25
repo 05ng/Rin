@@ -12,6 +12,7 @@ describe("collectWorkerSecrets", () => {
       JWT_SECRET: "jwt-secret",
       ADMIN_USERNAME: "admin",
       ADMIN_PASSWORD: "password",
+      ADMIN_TOTP_SECRET: "totp-seed",
       RIN_GITHUB_CLIENT_ID: "client-id",
       RIN_GITHUB_CLIENT_SECRET: "client-secret",
       S3_ACCESS_KEY_ID: "access-key",
@@ -23,6 +24,7 @@ describe("collectWorkerSecrets", () => {
       JWT_SECRET: "jwt-secret",
       ADMIN_USERNAME: "admin",
       ADMIN_PASSWORD: "password",
+      ADMIN_TOTP_SECRET: "totp-seed",
       RIN_GITHUB_CLIENT_ID: "client-id",
       RIN_GITHUB_CLIENT_SECRET: "client-secret",
       S3_ACCESS_KEY_ID: "access-key",
@@ -35,6 +37,7 @@ describe("collectWorkerSecrets", () => {
       JWT_SECRET: "",
       ADMIN_USERNAME: undefined,
       ADMIN_PASSWORD: "password",
+      ADMIN_TOTP_SECRET: "",
     });
 
     expect(secrets).toEqual({

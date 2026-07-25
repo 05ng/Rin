@@ -68,11 +68,22 @@ These sensitive values must be configured as **Cloudflare Workers Secrets**, ent
 | `RIN_GITHUB_CLIENT_SECRET` | GitHub OAuth client secret | GitHub OAuth App settings |
 | `ADMIN_USERNAME` | Username for password login | Set yourself |
 | `ADMIN_PASSWORD` | Password for password login | Set yourself |
+| `ADMIN_TOTP_SECRET` | Base32 seed for TOTP MFA | Generate with `bun run mfa:secret` |
 | `JWT_SECRET` | JWT signing key (any random string) | Generate yourself |
 
 :::warning Authentication Required
 You must configure either **GitHub OAuth** or **Username/Password** authentication, otherwise you cannot access the admin panel.
 :::
+
+### Administrator MFA (recommended)
+
+Set `ADMIN_TOTP_SECRET` as a Cloudflare Worker secret to require a six-digit TOTP code for every administrator sign-in, including GitHub OAuth. Generate a Base32 seed and provisioning URI locally with:
+
+```bash
+bun run mfa:secret "Rin" "admin"
+```
+
+Add the printed secret to your Worker as `ADMIN_TOTP_SECRET`, then add the same seed or provisioning URI to your authenticator app. Do not put this value in `wrangler.toml` or source control.
 
 ### S3 Storage Credentials
 
@@ -122,6 +133,7 @@ RIN_GITHUB_CLIENT_ID          # GitHub OAuth ID (optional)
 RIN_GITHUB_CLIENT_SECRET      # GitHub OAuth Secret (optional)
 ADMIN_USERNAME                # Admin username (optional)
 ADMIN_PASSWORD                # Admin password (optional)
+ADMIN_TOTP_SECRET         # TOTP MFA seed for administrator accounts (recommended)
 JWT_SECRET                    # JWT secret key
 ```
 
@@ -148,6 +160,7 @@ RIN_GITHUB_CLIENT_SECRET=xxx
 # OR
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=secure_password
+ADMIN_TOTP_SECRET=BASE32_TOTP_SEED
 
 # Others
 JWT_SECRET=random_secret_key

@@ -2,155 +2,213 @@ import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import type { AppContext, Variables } from "../core/hono-types";
 import { profileAsync } from "../core/server-timing";
-import { setJWTCookie, clearJWTCookie } from "../core/hono-middleware";
+import { setJWTCookie } from "../core/hono-middleware";
+import {
+  clearMfaChallengeCookie,
+  createAccessToken,
+  getAdminTotpSecret,
+  getMfaChallengeUserId,
+  isAdminMfaEnabled,
+  setMfaChallengeCookie,
+} from "../utils/admin-mfa";
+import { verifyTotp } from "../utils/totp";
 import { users } from "../db/schema";
 import {
-    BadRequestError,
-    ForbiddenError,
-    InternalServerError,
+  BadRequestError,
+  ForbiddenError,
+  InternalServerError,
 } from "../errors";
+
+type AuthenticatedUser = {
+  id: number;
+  username: string;
+  avatar: string | null;
+  permission: number | null;
+};
 
 // Hash password using SHA-256
 async function hashPassword(password: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function finishLogin(c: AppContext, user: AuthenticatedUser) {
+  const token = await profileAsync(c, "auth_access_token", () =>
+    createAccessToken(c.get("jwt"), user.id),
+  );
+  setJWTCookie(c, token);
+
+  return c.json({
+    success: true,
+    token,
+    user: {
+      id: user.id,
+      username: user.username,
+      avatar: user.avatar,
+      permission: user.permission === 1,
+    },
+  });
+}
+
+async function startMfaChallenge(c: AppContext, userId: number) {
+  await profileAsync(c, "auth_mfa_challenge", () => setMfaChallengeCookie(c, userId));
+  return c.json({ success: false, mfaRequired: true });
 }
 
 export function PasswordAuthService(): Hono<{
-        Bindings: Env;
-        Variables: Variables;
-    }> {
-    const app = new Hono<{
-        Bindings: Env;
-        Variables: Variables;
-    }>();
-    // Login with username and password
-    app.post("/login", async (c: AppContext) => {
-        const jwt = c.get('jwt');
-        const db = c.get('db');
-        const env = c.env;
+  Bindings: Env;
+  Variables: Variables;
+}> {
+  const app = new Hono<{
+    Bindings: Env;
+    Variables: Variables;
+  }>();
 
-        // Check if admin credentials are configured
-        const adminUsername = env.ADMIN_USERNAME;
-        const adminPassword = env.ADMIN_PASSWORD;
+  app.post("/login", async (c: AppContext) => {
+    const db = c.get("db");
+    const env = c.env;
+    const adminUsername = env.ADMIN_USERNAME;
+    const adminPassword = env.ADMIN_PASSWORD;
 
-        if (!adminUsername || !adminPassword) {
-            throw new BadRequestError('Admin credentials not configured');
+    if (!adminUsername || !adminPassword) {
+      throw new BadRequestError("Admin credentials not configured");
+    }
+
+    const { username, password } = (await profileAsync(c, "auth_login_parse", () =>
+      c.req.json(),
+    )) as { username: string; password: string };
+
+    if (!username || !password) {
+      throw new BadRequestError("Username and password are required");
+    }
+
+    const hashedPassword = await profileAsync(c, "auth_login_hash", () => hashPassword(password));
+
+    if (username === adminUsername) {
+      const expectedHash = await profileAsync(c, "auth_admin_hash", () =>
+        hashPassword(adminPassword),
+      );
+
+      if (hashedPassword !== expectedHash) {
+        throw new ForbiddenError("Invalid credentials");
+      }
+
+      let user = await profileAsync(c, "auth_admin_lookup", () =>
+        db.query.users.findFirst({ where: eq(users.openid, "admin") }),
+      );
+
+      if (!user) {
+        const result = await profileAsync(c, "auth_admin_insert", () =>
+          db
+            .insert(users)
+            .values({
+              username: adminUsername,
+              openid: "admin",
+              avatar: "",
+              permission: 1,
+              password: expectedHash,
+            })
+            .returning({ insertedId: users.id }),
+        );
+
+        if (!result || result.length === 0) {
+          throw new InternalServerError("Failed to create admin user");
         }
 
-        const { username, password } = await profileAsync(c, 'auth_login_parse', () => c.req.json()) as { username: string; password: string };
+        user = await profileAsync(c, "auth_admin_reload", () =>
+          db.query.users.findFirst({ where: eq(users.id, result[0].insertedId) }),
+        );
+      }
 
-        if (!username || !password) {
-            throw new BadRequestError('Username and password are required');
-        }
+      if (!user) {
+        throw new InternalServerError("Failed to get admin user");
+      }
 
-        // Hash the provided password
-        const hashedPassword = await profileAsync(c, 'auth_login_hash', () => hashPassword(password));
+      if (user.password !== expectedHash) {
+        await profileAsync(c, "auth_admin_sync", () =>
+          db
+            .update(users)
+            .set({ password: expectedHash, username: adminUsername })
+            .where(eq(users.id, user.id)),
+        );
+      }
 
-        // Check if this is the admin login
-        if (username === adminUsername) {
-            const expectedHash = await profileAsync(c, 'auth_admin_hash', () => hashPassword(adminPassword));
-            
-            if (hashedPassword !== expectedHash) {
-                throw new ForbiddenError('Invalid credentials');
-            }
+      if (isAdminMfaEnabled(env)) {
+        return startMfaChallenge(c, user.id);
+      }
 
-            // Find or create admin user
-            let user = await profileAsync(c, 'auth_admin_lookup', () => db.query.users.findFirst({ 
-                where: eq(users.openid, "admin") 
-            }));
+      return finishLogin(c, user);
+    }
 
-            if (!user) {
-                // Create admin user if not exists
-                const result = await profileAsync(c, 'auth_admin_insert', () => db.insert(users).values({
-                    username: adminUsername,
-                    openid: "admin",
-                    avatar: "",
-                    permission: 1,
-                    password: expectedHash,
-                }).returning({ insertedId: users.id }));
+    const user = await profileAsync(c, "auth_user_lookup", () =>
+      db.query.users.findFirst({ where: eq(users.username, username) }),
+    );
 
-                if (!result || result.length === 0) {
-                    throw new InternalServerError('Failed to create admin user');
-                }
+    if (!user || !user.password || user.password !== hashedPassword) {
+      throw new ForbiddenError("Invalid credentials");
+    }
 
-                user = await profileAsync(c, 'auth_admin_reload', () => db.query.users.findFirst({ 
-                    where: eq(users.id, result[0].insertedId) 
-                }));
-            }
+    if (user.permission === 1 && isAdminMfaEnabled(env)) {
+      return startMfaChallenge(c, user.id);
+    }
 
-            if (!user) {
-                throw new InternalServerError('Failed to get admin user');
-            }
+    return finishLogin(c, user);
+  });
 
-            if (user.password !== expectedHash) {
-                // Update admin password if changed
-                await profileAsync(c, 'auth_admin_sync', () => db.update(users)
-                    .set({ password: expectedHash, username: adminUsername })
-                    .where(eq(users.id, user.id)));
-            }
+  app.post("/mfa/verify", async (c: AppContext) => {
+    const db = c.get("db");
+    const secret = getAdminTotpSecret(c.env);
 
-            // Generate JWT token
-            const token = await profileAsync(c, 'auth_admin_token', () => jwt.sign({ id: user.id }));
+    if (!secret) {
+      throw new BadRequestError("Admin MFA is not configured");
+    }
 
-            // Set JWT cookie using Hono helper
-            setJWTCookie(c, token);
+    const { code } = (await profileAsync(c, "auth_mfa_parse", () =>
+      c.req.json(),
+    )) as { code?: unknown };
+    if (typeof code !== "string") {
+      throw new BadRequestError("Authentication code is required");
+    }
 
-            return c.json({
-                success: true,
-                token: token,
-                user: {
-                    id: user.id,
-                    username: user.username,
-                    avatar: user.avatar,
-                    permission: user.permission === 1,
-                }
-            });
-        }
+    const userId = await profileAsync(c, "auth_mfa_challenge_verify", () =>
+      getMfaChallengeUserId(c),
+    );
+    if (!userId) {
+      clearMfaChallengeCookie(c);
+      throw new ForbiddenError("MFA challenge expired. Sign in again.");
+    }
 
-        // Regular user login (if we want to support multiple users with passwords in the future)
-        const user = await profileAsync(c, 'auth_user_lookup', () => db.query.users.findFirst({ 
-            where: eq(users.username, username) 
-        }));
+    const user = await profileAsync(c, "auth_mfa_user_lookup", () =>
+      db.query.users.findFirst({ where: eq(users.id, userId) }),
+    );
+    if (!user || user.permission !== 1) {
+      clearMfaChallengeCookie(c);
+      throw new ForbiddenError("MFA is only available for administrator accounts");
+    }
 
-        if (!user || !user.password) {
-            throw new ForbiddenError('Invalid credentials');
-        }
+    const validCode = await profileAsync(c, "auth_mfa_totp_verify", () =>
+      verifyTotp(secret, code),
+    );
+    if (!validCode) {
+      throw new ForbiddenError("Invalid authentication code");
+    }
 
-        if (user.password !== hashedPassword) {
-            throw new ForbiddenError('Invalid credentials');
-        }
+    clearMfaChallengeCookie(c);
+    return finishLogin(c, user);
+  });
 
-        // Generate JWT token
-        const token = await profileAsync(c, 'auth_user_token', () => jwt.sign({ id: user.id }));
+  app.get("/status", (c: AppContext) => {
+    const env = c.env;
 
-        // Set JWT cookie using Hono helper
-        setJWTCookie(c, token);
-
-        return c.json({
-            success: true,
-            token: token,
-            user: {
-                id: user.id,
-                username: user.username,
-                avatar: user.avatar,
-                permission: user.permission === 1,
-            }
-        });
+    return c.json({
+      github: !!(env.RIN_GITHUB_CLIENT_ID && env.RIN_GITHUB_CLIENT_SECRET),
+      mfa: isAdminMfaEnabled(env),
+      password: !!(env.ADMIN_USERNAME && env.ADMIN_PASSWORD),
     });
+  });
 
-    // Check if password login is available
-    app.get("/status", async (c: AppContext) => {
-        const env = c.env;
-        
-        return c.json({
-            github: !!(env.RIN_GITHUB_CLIENT_ID && env.RIN_GITHUB_CLIENT_SECRET),
-            password: !!(env.ADMIN_USERNAME && env.ADMIN_PASSWORD),
-        });
-    });
-
-    return app;
+  return app;
 }

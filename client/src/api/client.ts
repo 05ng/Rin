@@ -33,6 +33,7 @@ import type {
   AuthStatus,
   LoginRequest,
   LoginResponse,
+  MfaVerificationRequest,
 } from "@rin/api";
 
 export interface SettingsConfigResponse {
@@ -155,6 +156,7 @@ export type {
   AuthStatus,
   LoginRequest,
   LoginResponse,
+  MfaVerificationRequest,
 } from "@rin/api";
 
 
@@ -605,6 +607,11 @@ class AuthAPI {
   // POST /api/auth/login
   async login(body: LoginRequest): Promise<ApiResponse<LoginResponse>> {
     return this.http.post<LoginResponse>("/api/auth/login", body);
+  }
+
+  // POST /api/auth/mfa/verify
+  async verifyMfa(body: MfaVerificationRequest): Promise<ApiResponse<LoginResponse>> {
+    return this.http.post<LoginResponse>("/api/auth/mfa/verify", body);
   }
 }
 

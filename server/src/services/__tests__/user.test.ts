@@ -172,6 +172,33 @@ describe('UserService', () => {
             }
         });
 
+        it('should require MFA before completing an administrator GitHub login', async () => {
+            Object.assign(env, { ADMIN_TOTP_SECRET: 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ' });
+            const originalFetch = global.fetch;
+            global.fetch = async () => {
+                return new Response(JSON.stringify({
+                    id: 'gh_456',
+                    login: 'admin',
+                    name: 'Admin',
+                    avatar_url: 'https://github.com/admin.png'
+                }), { status: 200 });
+            };
+
+            try {
+                const res = await app.request('/github/callback?code=valid_code&state=mock_state', {
+                    method: 'GET',
+                    headers: {
+                        'Cookie': 'state=mock_state; redirect_to=http://localhost:5173/callback'
+                    }
+                }, env);
+
+                expect(res.status).toBe(302);
+                expect(res.headers.get('Location')).toBe('http://localhost:5173/login?mfa=1');
+                expect(res.headers.get('Set-Cookie')).toContain('mfa_pending=');
+            } finally {
+                global.fetch = originalFetch;
+            }
+        });
         it('should reject invalid state', async () => {
             const res = await app.request('/github/callback?code=valid_code&state=wrong_state', {
                 method: 'GET',

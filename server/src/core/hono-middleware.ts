@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/d1";
 import type { AppContext, Variables, JWTUtils, OAuth2Utils } from "./hono-types";
 import { eq } from "drizzle-orm";
 import { profileAsync } from "./server-timing";
+import { isAdminMfaEnabled, isMfaChallengePayload } from "../utils/admin-mfa";
 
 // Lazy initialization container
 class LazyInitContainer {
@@ -122,17 +123,24 @@ export const authMiddleware = createMiddleware<{
 
         if (token && jwt) {
             const profile = await profileAsync(c, "auth_verify", () => jwt.verify(token));
-            if (profile) {
+            if (profile && !isMfaChallengePayload(profile) && Number.isInteger(profile.id)) {
                 const { users } = await import("../db/schema");
                 const user = await profileAsync(c, "auth_user_lookup", () => db.query.users.findFirst({
                     where: eq(users.id, profile.id)
                 }));
 
-                if (user) {
-                    c.set('uid', user.id);
-                    c.set('username', user.username);
-                    c.set('admin', user.permission === 1);
+                if (!user) {
+                    return;
                 }
+
+                // Enabling MFA invalidates legacy admin tokens that were issued before MFA.
+                if (user.permission === 1 && isAdminMfaEnabled(c.env) && profile.purpose !== "access") {
+                    return;
+                }
+
+                c.set('uid', user.id);
+                c.set('username', user.username);
+                c.set('admin', user.permission === 1);
             }
         }
     });

@@ -15,7 +15,13 @@
   "compat_tasks": {
     "title": "兼容任务",
     "loading": "正在加载兼容任务状态...",
-    "generated_at": "最近更新时间：{{date}}",
+    "mfa": {
+      "description": "请输入身份验证器应用中显示的 6 位验证码。",
+      "placeholder": "6 位验证码",
+      "title": "验证身份",
+      "verify": "验证",
+      "verifying": "验证中..."
+    },    "generated_at": "最近更新时间：{{date}}",
     "running": "执行中",
     "yes": "是",
     "no": "否",
@@ -209,9 +215,18 @@
       "empty": "请输入用户名和密码",
       "failed": "登录失败",
       "invalid": "用户名或密码错误",
-      "network": "网络错误，请重试"
+      "network": "网络错误，请重试",
+      "code": "请输入身份验证器应用中的 6 位验证码",
+      "invalid_code": "验证码无效或已过期"
     },
     "loading": "登录中...",
+    "mfa": {
+      "description": "请输入身份验证器应用中显示的 6 位验证码。",
+      "placeholder": "6 位验证码",
+      "title": "验证身份",
+      "verify": "验证",
+      "verifying": "验证中..."
+    },
     "no_methods": "没有可用的登录方式",
     "oauth_only": "请登录后继续",
     "or": "或",
@@ -256,7 +271,13 @@
     "generated_at": "最近更新时间：{{date}}",
     "load_failed": "队列状态加载失败",
     "loading": "正在加载队列任务状态...",
-    "not_configured": "未配置",
+    "mfa": {
+      "description": "请输入身份验证器应用中显示的 6 位验证码。",
+      "placeholder": "6 位验证码",
+      "title": "验证身份",
+      "verify": "验证",
+      "verifying": "验证中..."
+    },    "not_configured": "未配置",
     "status": {
       "completed": "已完成",
       "failed": "失败",
@@ -581,7 +602,9 @@
       "invalid_file_type": "请上传图片文件",
       "empty_username": "昵称不能为空",
       "update_failed": "更新失败",
-      "network": "网络错误，请重试"
+      "network": "网络错误，请重试",
+      "code": "请输入身份验证器应用中的 6 位验证码",
+      "invalid_code": "验证码无效或已过期"
     }
   },
   "health": {
@@ -741,7 +764,13 @@
     },
     "load_failed": "健康检查加载失败",
     "loading": "正在检查运行环境与配置...",
-    "status": {
+    "mfa": {
+      "description": "请输入身份验证器应用中显示的 6 位验证码。",
+      "placeholder": "6 位验证码",
+      "title": "验证身份",
+      "verify": "验证",
+      "verifying": "验证中..."
+    },    "status": {
       "danger": "需要处理",
       "success": "已就绪",
       "warning": "需要关注"

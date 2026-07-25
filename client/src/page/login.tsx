@@ -9,113 +9,180 @@ import { setAuthToken } from "../utils/auth";
 import { getLoginRedirectPath } from "../utils/auth-redirect";
 
 export function LoginPage() {
-    const [username, setUsername] = useState('')
-    const [password, setPassword] = useState('')
-    const [authStatus, setAuthStatus] = useState<{ github: boolean; password: boolean }>({ github: false, password: false });
-    const [isLoading, setIsLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [, setLocation] = useLocation();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [awaitingMfa, setAwaitingMfa] = useState(
+    () => new URLSearchParams(window.location.search).get("mfa") === "1",
+  );
+  const [authStatus, setAuthStatus] = useState<{ github: boolean; password: boolean }>({
+    github: false,
+    password: false,
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [, setLocation] = useLocation();
 
-    // Fetch auth status on mount
-    useEffect(() => {
-        client.auth.status().then(({ data }) => {
-            if (data) {
-                setAuthStatus(data);
-            }
-        });
-    }, []);
+  useEffect(() => {
+    client.auth.status().then(({ data }) => {
+      if (data) {
+        setAuthStatus(data);
+      }
+    });
+  }, []);
 
-    const handleLogin = async () => {
-        if (!username || !password) {
-            setError(t('login.error.empty'));
-            return;
-        }
+  function finishLogin(token: string | undefined) {
+    if (token) {
+      setAuthToken(token);
+    }
+    setLocation(getLoginRedirectPath(window.location.search));
+    window.location.reload();
+  }
 
-        setIsLoading(true);
-        setError('');
+  const handleLogin = async () => {
+    if (!username || !password) {
+      setError(t("login.error.empty"));
+      return;
+    }
 
-        try {
-            const { data, error: apiError } = await client.auth.login({ username, password });
+    setIsLoading(true);
+    setError("");
 
-            if (apiError) {
-                setError(t('login.error.invalid'));
-                setIsLoading(false);
-                return;
-            }
+    try {
+      const { data, error: apiError } = await client.auth.login({ username, password });
 
-            if (data?.success) {
-                // Save token to localStorage for cross-domain auth
-                if (data.token) {
-                    setAuthToken(data.token);
-                }
-                setLocation(getLoginRedirectPath(window.location.search));
-                window.location.reload();
-            } else {
-                setError(t('login.error.failed'));
-            }
-        } catch (err) {
-            setError(t('login.error.network'));
-        } finally {
-            setIsLoading(false);
-        }
-    };
+      if (apiError) {
+        setError(t("login.error.invalid"));
+        return;
+      }
 
-    return (
-        <div className="flex items-center justify-center my-8">
-            <div className="bg-w w-full max-w-md flex flex-col items-center justify-between p-8 space-y-4 t-primary rounded-2xl shadow-lg">
-                <p className="text-2xl font-bold">{t('login.title')}</p>
+      if (data?.mfaRequired) {
+        setAwaitingMfa(true);
+        setPassword("");
+        return;
+      }
 
-                {/* Error message */}
-                {error && (
-                    <p className="text-sm text-red-500">{error}</p>
-                )}
+      if (data?.success) {
+        finishLogin(data.token);
+        return;
+      }
 
-                {/* Password login form */}
-                {authStatus.password && (
-                    <>
-                        <Input
-                            value={username}
-                            setValue={setUsername}
-                            placeholder={t('login.username.placeholder')}
-                            disabled={isLoading}
-                            autofocus
-                        />
-                        <Input
-                            value={password}
-                            setValue={setPassword}
-                            placeholder={t('login.password.placeholder')}
-                            type="password"
-                            onSubmit={handleLogin}
-                            disabled={isLoading}
-                        />
-                        <div className="flex flex-row items-center space-x-4 pt-2">
-                            <ButtonWithLoading
-                                title={isLoading ? t("login.loading") : t("login.title")}
-                                onClick={handleLogin}
-                                loading={isLoading}
-                            />
-                        </div>
-                    </>
-                )}
+      setError(t("login.error.failed"));
+    } catch {
+      setError(t("login.error.network"));
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-                {/* OAuth options */}
-                {authStatus.github && (
-                    <div className="flex flex-col justify-center items-center space-y-2 pt-2">
-                        {authStatus.password && <p className="text-xs t-secondary">{t('login.or')}</p>}
-                        {!authStatus.password && <p className="text-xs t-secondary">{t('login.oauth_only')}</p>}
-                        <div className="flex flex-row items-center space-x-4">
-                            <Icon label={t('github_login')} name="ri-github-line" onClick={() => {
-                                window.location.href = `${oauth_url}`
-                            }} hover={true} />
-                        </div>
-                    </div>
-                )}
+  const handleMfaVerification = async () => {
+    const code = mfaCode.trim();
+    if (!/^\d{6}$/.test(code)) {
+      setError(t("login.error.code"));
+      return;
+    }
 
-                {/* No auth methods available */}
-                {!authStatus.github && !authStatus.password && (
-                    <p className="text-sm text-red-500">{t('login.no_methods')}</p>
-                )}
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const { data, error: apiError } = await client.auth.verifyMfa({ code });
+      if (apiError) {
+        setError(t("login.error.invalid_code"));
+        return;
+      }
+
+      if (data?.success) {
+        finishLogin(data.token);
+        return;
+      }
+
+      setError(t("login.error.failed"));
+    } catch {
+      setError(t("login.error.network"));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="my-8 flex items-center justify-center">
+      <div className="bg-w flex w-full max-w-md flex-col items-center justify-between space-y-4 rounded-2xl p-8 t-primary shadow-lg">
+        <p className="text-2xl font-bold">{awaitingMfa ? t("login.mfa.title") : t("login.title")}</p>
+
+        {error && <p className="text-sm text-red-500">{error}</p>}
+
+        {awaitingMfa ? (
+          <>
+            <p className="text-center text-sm t-secondary">{t("login.mfa.description")}</p>
+            <Input
+              autofocus
+              value={mfaCode}
+              setValue={setMfaCode}
+              placeholder={t("login.mfa.placeholder")}
+              onSubmit={handleMfaVerification}
+              disabled={isLoading}
+            />
+            <div className="flex flex-row items-center space-x-4 pt-2">
+              <ButtonWithLoading
+                title={isLoading ? t("login.mfa.verifying") : t("login.mfa.verify")}
+                onClick={handleMfaVerification}
+                loading={isLoading}
+              />
             </div>
-        </div>
-    );
+          </>
+        ) : (
+          <>
+            {authStatus.password && (
+              <>
+                <Input
+                  value={username}
+                  setValue={setUsername}
+                  placeholder={t("login.username.placeholder")}
+                  disabled={isLoading}
+                  autofocus
+                />
+                <Input
+                  value={password}
+                  setValue={setPassword}
+                  placeholder={t("login.password.placeholder")}
+                  type="password"
+                  onSubmit={handleLogin}
+                  disabled={isLoading}
+                />
+                <div className="flex flex-row items-center space-x-4 pt-2">
+                  <ButtonWithLoading
+                    title={isLoading ? t("login.loading") : t("login.title")}
+                    onClick={handleLogin}
+                    loading={isLoading}
+                  />
+                </div>
+              </>
+            )}
+
+            {authStatus.github && (
+              <div className="flex flex-col items-center justify-center space-y-2 pt-2">
+                {authStatus.password && <p className="text-xs t-secondary">{t("login.or")}</p>}
+                {!authStatus.password && <p className="text-xs t-secondary">{t("login.oauth_only")}</p>}
+                <div className="flex flex-row items-center space-x-4">
+                  <Icon
+                    label={t("github_login")}
+                    name="ri-github-line"
+                    onClick={() => {
+                      window.location.href = oauth_url;
+                    }}
+                    hover
+                  />
+                </div>
+              </div>
+            )}
+
+            {!authStatus.github && !authStatus.password && (
+              <p className="text-sm text-red-500">{t("login.no_methods")}</p>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
 }

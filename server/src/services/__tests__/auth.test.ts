@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { Hono } from "hono";
 import { PasswordAuthService } from "../auth";
+import { generateTotp } from "../../utils/totp";
 import {
   createMockDB,
   createMockEnv,
@@ -16,8 +17,12 @@ describe("PasswordAuthService", () => {
   let env: Env;
   let app: Hono<{ Bindings: Env; Variables: Variables }>;
   let api: ReturnType<typeof createTestClient>;
+  let issuedTokens: Map<string, Record<string, unknown>>;
+  let tokenSequence: number;
 
   beforeEach(async () => {
+    issuedTokens = new Map();
+    tokenSequence = 1;
     const mockDB = createMockDB();
     db = mockDB.db;
     sqlite = mockDB.sqlite;
@@ -33,11 +38,12 @@ describe("PasswordAuthService", () => {
     app.use(async (c: any, next: any) => {
       c.set("db", db);
       c.set("jwt", {
-        sign: async (payload: any) => `mock_token_${payload.id}`,
-        verify: async (token: string) => {
-          const match = token.match(/mock_token_(\d+)/);
-          return match ? { id: parseInt(match[1]) } : null;
+        sign: async (payload: Record<string, unknown>) => {
+          const token = `mock_token_${payload.id}_${tokenSequence++}`;
+          issuedTokens.set(token, payload);
+          return token;
         },
+        verify: async (token: string) => issuedTokens.get(token) ?? null,
       });
       c.set("env", env);
       await next();
@@ -256,6 +262,49 @@ describe("PasswordAuthService", () => {
     });
   });
 
+  describe("POST /auth/mfa/verify", () => {
+    it("requires a valid authenticator code before issuing an admin token", async () => {
+      Object.assign(env, { ADMIN_TOTP_SECRET: "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ" });
+
+      const loginResponse = await app.request("/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: "admin", password: "admin123" }),
+      }, env);
+      const loginData = await loginResponse.json() as { success: boolean; mfaRequired?: boolean; token?: string };
+      const challengeCookie = loginResponse.headers.get("set-cookie")?.split(";")[0];
+
+      expect(loginData.success).toBe(false);
+      expect(loginData.mfaRequired).toBe(true);
+      expect(loginData.token).toBeUndefined();
+      expect(challengeCookie).toStartWith("mfa_pending=");
+
+      const invalidResponse = await app.request("/auth/mfa/verify", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: challengeCookie!,
+        },
+        body: JSON.stringify({ code: "000000" }),
+      }, env);
+      expect(invalidResponse.status).toBe(403);
+
+      const code = await generateTotp("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ");
+      const verificationResponse = await app.request("/auth/mfa/verify", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: challengeCookie!,
+        },
+        body: JSON.stringify({ code }),
+      }, env);
+      const verificationData = await verificationResponse.json() as { success: boolean; token?: string };
+
+      expect(verificationResponse.status).toBe(200);
+      expect(verificationData.success).toBe(true);
+      expect(verificationData.token).toBeDefined();
+    });
+  });
   describe("GET /auth/status - Check auth availability", () => {
     it("should return github and password status", async () => {
       const result = await api.auth.status();

@@ -47,6 +47,10 @@ export const loginSchema = t.Object({
   password: t.String(),
 });
 
+export const mfaVerificationSchema = t.Object({
+  code: t.String(),
+});
+
 // ============================================================================
 // User Schemas
 // ============================================================================

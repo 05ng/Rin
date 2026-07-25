@@ -68,11 +68,22 @@ Rin 部署需要配置两类环境变量：**Variables（明文变量）**和**S
 | `RIN_GITHUB_CLIENT_SECRET` | GitHub OAuth 客户端密钥 | GitHub OAuth App 设置 |
 | `ADMIN_USERNAME` | 账号密码登录用户名 | 自行设定 |
 | `ADMIN_PASSWORD` | 账号密码登录密码 | 自行设定 |
+| `ADMIN_TOTP_SECRET` | 管理员 TOTP 多重验证的 Base32 密钥 | 使用 `bun run mfa:secret` 生成 |
 | `JWT_SECRET` | JWT 签名密钥（任意随机字符串） | 自行生成 |
 
 :::warning 认证要求
 必须配置 **GitHub OAuth** 或 **账号密码** 其中一种登录方式，否则无法登录后台。
 :::
+
+### 管理员 MFA（推荐）
+
+将 `ADMIN_TOTP_SECRET` 配置为 Cloudflare Worker Secret 后，每次管理员登录（包括 GitHub OAuth）都需要身份验证器应用提供的 6 位 TOTP 验证码。可在本地生成 Base32 密钥及配置 URI：
+
+```bash
+bun run mfa:secret "Rin" "admin"
+```
+
+将输出的密钥设置为 Worker 的 `ADMIN_TOTP_SECRET`，并将同一个密钥或配置 URI 添加到身份验证器应用。不要将该值写入 `wrangler.toml` 或提交到版本库。
 
 ### S3 存储凭证
 
@@ -122,6 +133,7 @@ RIN_GITHUB_CLIENT_ID      # GitHub OAuth ID（可选）
 RIN_GITHUB_CLIENT_SECRET  # GitHub OAuth Secret（可选）
 ADMIN_USERNAME            # 管理员用户名（可选）
 ADMIN_PASSWORD            # 管理员密码（可选）
+ADMIN_TOTP_SECRET         # 管理员 TOTP MFA 密钥（推荐）
 JWT_SECRET                # JWT 密钥
 ```
 
@@ -148,6 +160,7 @@ RIN_GITHUB_CLIENT_SECRET=xxx
 # 或
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=secure_password
+ADMIN_TOTP_SECRET=BASE32_TOTP_SEED
 
 # 其他
 JWT_SECRET=random_secret_key

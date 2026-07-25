@@ -16,6 +16,7 @@
     "dev:server": "bun cli/bin/rin.ts dev --server",
     "dev:hot": "bun cli/bin/rin.ts dev",
     "dev:cron": "bun wrangler dev --port 11498 --test-scheduled",
+    "mfa:secret": "bun scripts/generate-totp-secret.ts",
     "test": "bun test",
     "test:server": "bun --filter './server' test",
     "test:server:watch": "bun --filter './server' test --watch",

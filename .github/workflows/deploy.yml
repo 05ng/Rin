@@ -212,6 +212,7 @@ jobs:
           RIN_GITHUB_CLIENT_SECRET: ${{ secrets.RIN_GITHUB_CLIENT_SECRET || '' }}
           ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          ADMIN_TOTP_SECRET: ${{ secrets.ADMIN_TOTP_SECRET || '' }}
           JWT_SECRET: ${{ secrets.JWT_SECRET || '' }}
           WEBHOOK_URL: ${{ vars.WEBHOOK_URL || '' }}
           RSS_TITLE: ${{ vars.RSS_TITLE || '' }}

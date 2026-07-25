@@ -4,6 +4,7 @@ import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import type { AppContext } from "../core/hono-types";
 import { profileAsync } from "../core/server-timing";
 import { setJWTCookie } from "../core/hono-middleware";
+import { createAccessToken, isAdminMfaEnabled, setMfaChallengeCookie } from "../utils/admin-mfa";
 import { users } from "../db/schema";
 import {
     BadRequestError,
@@ -12,6 +13,13 @@ import {
     NotFoundError
 } from "../errors";
 
+function redirectToMfaLogin(c: AppContext) {
+    const redirectTo = getCookie(c, 'redirect_to');
+    const redirectUrl = new URL(redirectTo || c.req.url);
+    const loginUrl = new URL('/login', redirectUrl);
+    loginUrl.searchParams.set('mfa', '1');
+    return c.redirect(loginUrl.toString(), 302);
+}
 export function UserService(): Hono {
     const app = new Hono();
 
@@ -58,8 +66,6 @@ export function UserService(): Hono {
         const query = c.req.query();
         const stateCookie = getCookie(c, 'state');
 
-        console.log('param_state', query.state);
-        console.log('cookie_state', stateCookie);
 
         // Verify state to prevent CSRF attacks
         if (query.state !== stateCookie) {
@@ -98,6 +104,7 @@ export function UserService(): Hono {
         };
 
         let authToken: string | undefined;
+        const mfaEnabled = isAdminMfaEnabled(c.env);
 
         // Check if user exists
         const existingUser = await profileAsync(c, 'user_existing_lookup', () => db.query.users.findFirst({
@@ -107,7 +114,13 @@ export function UserService(): Hono {
         if (existingUser) {
             profile.permission = existingUser.permission;
             await profileAsync(c, 'user_existing_update', () => db.update(users).set(profile).where(eq(users.id, existingUser.id)));
-            authToken = await profileAsync(c, 'user_existing_token', () => jwt.sign({ id: existingUser.id }));
+
+            if (existingUser.permission === 1 && mfaEnabled) {
+                await profileAsync(c, 'user_existing_mfa_challenge', () => setMfaChallengeCookie(c, existingUser.id));
+                return redirectToMfaLogin(c);
+            }
+
+            authToken = await profileAsync(c, 'user_existing_token', () => createAccessToken(jwt, existingUser.id));
             setJWTCookie(c, authToken);
             // Store token in cookie for frontend to read (not HttpOnly)
             setCookie(c, 'auth_token', authToken, {
@@ -127,7 +140,12 @@ export function UserService(): Hono {
                 throw new InternalServerError('Failed to register user');
             }
 
-            authToken = await profileAsync(c, 'user_insert_token', () => jwt.sign({ id: result[0].insertedId }));
+            if (profile.permission === 1 && mfaEnabled) {
+                await profileAsync(c, 'user_insert_mfa_challenge', () => setMfaChallengeCookie(c, result[0].insertedId));
+                return redirectToMfaLogin(c);
+            }
+
+            authToken = await profileAsync(c, 'user_insert_token', () => createAccessToken(jwt, result[0].insertedId));
             setJWTCookie(c, authToken);
             // Store token in cookie for frontend to read (not HttpOnly)
             setCookie(c, 'auth_token', authToken, {
@@ -136,7 +154,6 @@ export function UserService(): Hono {
                 sameSite: 'Lax',
             });
         }
-
         const redirectTo = getCookie(c, 'redirect_to');
         const redirect_url = new URL(redirectTo || '/');
         // Add token to URL for frontend to store (for cross-domain auth)
