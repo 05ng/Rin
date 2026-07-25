@@ -77,6 +77,19 @@
       "title$keyword": "Search: {{keyword}}"
     },
     "title": "Articles",
+    "language": {
+      "label": "Article language",
+      "all": "All languages",
+      "en": "English",
+      "zh-CN": "Simplified Chinese",
+      "filter_label": "Filter articles by language"
+    },
+    "translation_of": {
+      "label": "Translation of",
+      "none": "Not linked to another article",
+      "hint": "Choose the article in the other language. Each group can have one English and one Simplified Chinese article."
+    },
+    "translation_switch": "Article translations",
     "previous": "Previous",
     "next": "Next",
     "top": {

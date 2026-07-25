@@ -1,3 +1,4 @@
+import type { ArticleLanguage, TranslationCandidate } from "@rin/api";
 import i18n from 'i18next';
 import _ from 'lodash';
 import {useCallback, useEffect, useState} from "react";
@@ -22,6 +23,8 @@ async function publish({
   summary,
   tags,
   draft,
+  language,
+  translationOf,
   createdAt,
   onCompleted,
   showAlert
@@ -32,6 +35,8 @@ async function publish({
   summary: string;
   tags: string[];
   draft: boolean;
+  language: ArticleLanguage;
+  translationOf: number | null;
   alias?: string;
   createdAt?: Date;
   onCompleted?: () => void;
@@ -47,6 +52,8 @@ async function publish({
       tags,
       listed,
       draft,
+      language,
+      translationOf,
       createdAt: createdAt?.toISOString(),
     }
   );
@@ -73,6 +80,8 @@ async function update({
   tags,
   listed,
   draft,
+  language,
+  translationOf,
   createdAt,
   onCompleted,
   showAlert
@@ -85,6 +94,8 @@ async function update({
   summary?: string;
   tags?: string[];
   draft?: boolean;
+  language: ArticleLanguage;
+  translationOf?: number | null;
   createdAt?: Date;
   onCompleted?: () => void;
   showAlert: ShowAlertType;
@@ -100,6 +111,8 @@ async function update({
       tags,
       listed,
       draft,
+      language,
+      translationOf,
       createdAt: createdAt?.toISOString(),
     }
   );
@@ -129,6 +142,9 @@ export function WritingPage({ id }: { id?: number }) {
   const [listed, setListed] = useState(true);
   const [content, setContent] = cache.useCache("content", "");
   const [createdAt, setCreatedAt] = useState<Date | undefined>(new Date());
+  const [language, setLanguage] = useState<ArticleLanguage>("en");
+  const [translationOf, setTranslationOf] = useState<number | null | undefined>(undefined);
+  const [translationCandidates, setTranslationCandidates] = useState<TranslationCandidate[]>([]);
   const [publishing, setPublishing] = useState(false)
   const { showAlert, AlertUI } = useAlert()
   function publishButton() {
@@ -149,6 +165,8 @@ export function WritingPage({ id }: { id?: number }) {
         tags: tagsplit,
         draft,
         listed,
+        language,
+        translationOf,
         createdAt,
         onCompleted: () => {
           setPublishing(false)
@@ -173,6 +191,8 @@ export function WritingPage({ id }: { id?: number }) {
         draft,
         alias,
         listed,
+        language,
+        translationOf: translationOf ?? null,
         createdAt,
         onCompleted: () => {
           setPublishing(false)
@@ -196,11 +216,22 @@ export function WritingPage({ id }: { id?: number }) {
             if (summary == "") setSummary((data as any).summary || "");
             setListed((data as any).listed === 1);
             setDraft((data as any).draft === 1);
+            setLanguage((data as any).language === "zh-CN" ? "zh-CN" : "en");
+            const translationGroup = (data as any).translationGroup;
+            setTranslationOf(translationGroup && translationGroup !== data.id ? translationGroup : undefined);
             setCreatedAt(new Date(data.createdAt));
           }
         });
     }
   }, []);
+  useEffect(() => {
+    const candidateLanguage: ArticleLanguage = language === "en" ? "zh-CN" : "en";
+    client.feed
+      .translationCandidates({ excludeId: id, language: candidateLanguage })
+      .then(({ data }) => {
+        if (data) setTranslationCandidates(data);
+      });
+  }, [id, language]);
   const debouncedUpdate = useCallback(
     _.debounce(() => {
       mermaid.initialize({
@@ -285,6 +316,35 @@ export function WritingPage({ id }: { id?: number }) {
               variant="flat"
               className="lg:col-span-2"
             />
+            <label className="flex flex-col gap-2 text-sm font-medium text-neutral-700 dark:text-neutral-200">
+              <span>{t("article.language.label")}</span>
+              <select
+                className="rounded-xl border border-black/10 bg-white px-3 py-2 text-neutral-900 dark:border-white/10 dark:bg-dark dark:text-white"
+                value={language}
+                onChange={(event) => setLanguage(event.target.value as ArticleLanguage)}
+              >
+                <option value="en">{t("article.language.en")}</option>
+                <option value="zh-CN">{t("article.language.zh-CN")}</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-medium text-neutral-700 dark:text-neutral-200">
+              <span>{t("article.translation_of.label")}</span>
+              <select
+                className="rounded-xl border border-black/10 bg-white px-3 py-2 text-neutral-900 dark:border-white/10 dark:bg-dark dark:text-white"
+                value={translationOf?.toString() ?? ""}
+                onChange={(event) => setTranslationOf(event.target.value ? Number(event.target.value) : null)}
+              >
+                <option value="">{t("article.translation_of.none")}</option>
+                {translationCandidates.map((candidate) => (
+                  <option key={candidate.id} value={candidate.translationGroup || candidate.id}>
+                    {`[${t(`article.language.${candidate.language}`)}] ${candidate.title || `#${candidate.id}`}`}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs font-normal text-neutral-500 dark:text-neutral-400">
+                {t("article.translation_of.hint")}
+              </span>
+            </label>
           </div>
 
           <div className="mt-5 grid gap-2 sm:gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(18rem,2fr)]">

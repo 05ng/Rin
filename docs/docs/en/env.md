@@ -83,7 +83,7 @@ Set `ADMIN_TOTP_SECRET` as a Cloudflare Worker secret to require a six-digit TOT
 bun run mfa:secret "Rin" "admin"
 ```
 
-Add the printed secret to your Worker as `ADMIN_TOTP_SECRET`, then add the same seed or provisioning URI to your authenticator app. Do not put this value in `wrangler.toml` or source control.
+Scan the printed terminal QR code with your authenticator app, then add the printed secret to your Worker as `ADMIN_TOTP_SECRET`. Do not put this value in `wrangler.toml` or source control.
 
 ### S3 Storage Credentials
 

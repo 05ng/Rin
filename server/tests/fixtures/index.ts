@@ -46,6 +46,8 @@ export function createMockDB() {
             ai_summary_status TEXT DEFAULT 'idle' NOT NULL,
             ai_summary_error TEXT DEFAULT '' NOT NULL,
             content TEXT NOT NULL,
+            language TEXT DEFAULT 'en' NOT NULL,
+            translation_group INTEGER,
             listed INTEGER DEFAULT 1 NOT NULL,
             draft INTEGER DEFAULT 1 NOT NULL,
             top INTEGER DEFAULT 0 NOT NULL,

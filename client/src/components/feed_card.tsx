@@ -1,3 +1,4 @@
+import type { ArticleLanguage } from "@rin/api";
 import { Link } from "wouter";
 import { useTranslation } from "react-i18next";
 import { timeago } from "../utils/timeago";
@@ -89,6 +90,7 @@ export type FeedCardProps = {
     draft?: number;
     listed?: number;
     top?: number;
+    language?: ArticleLanguage;
     title: string;
     summary: string;
     hashtags?: { id: number, name: string }[];
@@ -98,7 +100,7 @@ export type FeedCardProps = {
     variant?: FeedCardVariant;
 };
 
-export function FeedCard({ id, title, avatar, draft, listed, top, summary, hashtags, createdAt, updatedAt, preview = false, variant }: FeedCardProps) {
+export function FeedCard({ id, title, avatar, draft, listed, top, language, summary, hashtags, createdAt, updatedAt, preview = false, variant }: FeedCardProps) {
     const { t } = useTranslation();
     const siteConfig = useSiteConfig();
     const safeHashtags = Array.isArray(hashtags) ? hashtags : [];
@@ -124,6 +126,7 @@ export function FeedCard({ id, title, avatar, draft, listed, top, summary, hasht
                     }
                 </p>
                 <p className={`space-x-2 ${styles.meta} ${activeVariant === "editorial" ? "mt-2" : ""}`}>
+                    {language && <span>{t(`article.language.${language}`)}</span>}
                     {draft === 1 && <span>{t("draft")}</span>}
                     {listed === 0 && <span>{t("unlisted")}</span>}
                     {top === 1 && <span className="text-theme">{t('article.top.title')}</span>}

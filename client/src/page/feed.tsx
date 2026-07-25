@@ -227,6 +227,20 @@ export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Elemen
                       </h1>
                       <div className="flex-1 w-0" />
                     </div>
+                    <nav className="mt-3 flex flex-wrap items-center gap-2" aria-label={t("article.translation_switch")}>
+                      <span className="rounded-full bg-theme px-3 py-1 text-xs font-medium text-white">
+                        {t(`article.language.${feed.language || "en"}`)}
+                      </span>
+                      {feed.translations?.map((translation) => (
+                        <Link
+                          key={translation.id}
+                          href={`/feed/${translation.id}`}
+                          className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-neutral-700 transition-colors hover:bg-theme hover:text-white dark:text-neutral-200"
+                        >
+                          {t(`article.language.${translation.language}`)}
+                        </Link>
+                      ))}
+                    </nav>
                   </div>
                   <div className="pt-2">
                     {profile?.permission && (

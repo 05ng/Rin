@@ -1,3 +1,5 @@
+import QRCode from "qrcode";
+
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 const issuer = Bun.argv[2] || "Rin";
 const accountName = Bun.argv[3] || "admin";
@@ -8,3 +10,12 @@ const uri = `otpauth://totp/${encodeURIComponent(label)}?secret=${secret}&issuer
 
 console.log(`ADMIN_TOTP_SECRET=${secret}`);
 console.log(`otpauth URI: ${uri}`);
+console.log("\nScan this QR code with your authenticator app:");
+console.log(
+  await QRCode.toString(uri, {
+    errorCorrectionLevel: "M",
+    margin: 2,
+    small: true,
+    type: "terminal",
+  }),
+);

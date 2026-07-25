@@ -9,6 +9,7 @@ import { ProfileContext } from "../state/profile"
 import { useSiteConfig } from "../hooks/useSiteConfig";
 import { siteName } from "../utils/constants"
 import { tryInt } from "../utils/int"
+import type { ArticleLanguage } from "@rin/api";
 import { useTranslation } from "react-i18next";
 
 type FeedsData = {
@@ -18,6 +19,7 @@ type FeedsData = {
 }
 
 type FeedType = 'draft' | 'unlisted' | 'normal'
+type LanguageFilter = ArticleLanguage | 'all'
 
 type FeedsMap = {
     [key in FeedType]: FeedsData
@@ -29,6 +31,8 @@ export function FeedsPage() {
     const query = new URLSearchParams(useSearch());
     const profile = useContext(ProfileContext);
     const [listState, _setListState] = useState<FeedType>(query.get("type") as FeedType || 'normal')
+    const languageQuery = query.get("language");
+    const language: LanguageFilter = languageQuery === "en" || languageQuery === "zh-CN" ? languageQuery : "all";
     const [status, setStatus] = useState<'loading' | 'idle'>('idle')
     const [feeds, setFeeds] = useState<FeedsMap>({
         draft: { size: 0, data: [], hasNext: false },
@@ -40,12 +44,21 @@ export function FeedsPage() {
     const feedListClass = siteConfig.feedLayout === "masonry" ? "wauto columns-1 gap-5 ani-show md:columns-2" : "wauto flex flex-col ani-show";
     const currentFeeds = feeds[listState] ?? { size: 0, data: [], hasNext: false };
     const currentFeedData = Array.isArray(currentFeeds.data) ? currentFeeds.data : [];
+    const articleHref = (nextLanguage: LanguageFilter, nextPage = page) => {
+        const params = new URLSearchParams();
+        if (listState !== "normal") params.set("type", listState);
+        if (nextLanguage !== "all") params.set("language", nextLanguage);
+        if (nextPage > 1) params.set("page", nextPage.toString());
+        const queryString = params.toString();
+        return queryString ? `/?${queryString}` : "/";
+    };
     const ref = useRef("")
     function fetchFeeds(type: FeedType) {
         client.feed.list({
             page: page,
             limit: limit,
-            type: type
+            type: type,
+            language: language === "all" ? undefined : language,
         }).then(({ data }) => {
             if (data) {
                 setFeeds({
@@ -57,7 +70,7 @@ export function FeedsPage() {
         })
     }
     useEffect(() => {
-        const key = `${query.get("page")} ${query.get("type")} ${limit}`
+        const key = `${query.get("page")} ${query.get("type")} ${query.get("language")} ${limit}`
         if (ref.current == key) return
         const type = query.get("type") as FeedType || 'normal'
         if (type !== listState) {
@@ -66,7 +79,7 @@ export function FeedsPage() {
         setStatus('loading')
         fetchFeeds(type)
         ref.current = key
-    }, [limit, query.get("page"), query.get("type")])
+    }, [language, limit, query.get("page"), query.get("type")])
     return (
         <>
             <Helmet>
@@ -98,6 +111,17 @@ export function FeedsPage() {
                                 </div>
                             }
                         </div>
+                        <nav className="mt-4 flex flex-wrap gap-2" aria-label={t("article.language.filter_label")}>
+                            {(["all", "en", "zh-CN"] as LanguageFilter[]).map((item) => (
+                                <Link
+                                    key={item}
+                                    href={articleHref(item)}
+                                    className={`rounded-full px-3 py-1 text-sm font-medium ${language === item ? "bg-theme text-white" : "bg-secondary text-neutral-600 dark:text-neutral-300"}`}
+                                >
+                                    {item === "all" ? t("article.language.all") : t(`article.language.${item}`)}
+                                </Link>
+                            ))}
+                        </nav>
                     </div>
                     <Waiting for={status === 'idle'}>
                         <div className={feedListClass}>
@@ -107,14 +131,14 @@ export function FeedsPage() {
                         </div>
                         <div className="wauto flex flex-row items-center mt-4 ani-show">
                             {page > 1 &&
-                                <Link href={`/?type=${listState}&page=${(page - 1)}`}
+                                <Link href={articleHref(language, page - 1)}
                                     className={`text-sm font-normal rounded-full px-4 py-2 text-white bg-theme`}>
                                     {t('previous')}
                                 </Link>
                             }
                             <div className="flex-1" />
                             {currentFeeds.hasNext &&
-                                <Link href={`/?type=${listState}&page=${(page + 1)}`}
+                                <Link href={articleHref(language, page + 1)}
                                     className={`text-sm font-normal rounded-full px-4 py-2 text-white bg-theme`}>
                                     {t('next')}
                                 </Link>

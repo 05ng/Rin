@@ -34,6 +34,8 @@ import type {
   LoginRequest,
   LoginResponse,
   MfaVerificationRequest,
+  ArticleLanguage,
+  TranslationCandidate,
 } from "@rin/api";
 
 export interface SettingsConfigResponse {
@@ -157,6 +159,8 @@ export type {
   LoginRequest,
   LoginResponse,
   MfaVerificationRequest,
+  ArticleLanguage,
+  TranslationCandidate,
 } from "@rin/api";
 
 
@@ -281,14 +285,24 @@ class FeedAPI {
   constructor(private http: HttpClient) {}
 
   // GET /api/feed
-  async list(params?: { page?: number; limit?: number; type?: 'draft' | 'unlisted' | 'normal' }): Promise<ApiResponse<FeedListResponse>> {
+  async list(params?: { page?: number; limit?: number; type?: 'draft' | 'unlisted' | 'normal'; language?: ArticleLanguage }): Promise<ApiResponse<FeedListResponse>> {
     const searchParams = new URLSearchParams();
     if (params?.page) searchParams.set("page", params.page.toString());
     if (params?.limit) searchParams.set("limit", params.limit.toString());
     if (params?.type) searchParams.set("type", params.type);
-    
+    if (params?.language) searchParams.set("language", params.language);
+
     const query = searchParams.toString();
     return this.http.get<FeedListResponse>(`/api/feed${query ? `?${query}` : ""}`);
+  }
+
+  async translationCandidates(params?: { excludeId?: number; language?: ArticleLanguage }): Promise<ApiResponse<TranslationCandidate[]>> {
+    const searchParams = new URLSearchParams();
+    if (params?.excludeId) searchParams.set("exclude", params.excludeId.toString());
+    if (params?.language) searchParams.set("language", params.language);
+
+    const query = searchParams.toString();
+    return this.http.get<TranslationCandidate[]>(`/api/feed/translation-candidates${query ? `?${query}` : ""}`);
   }
 
   // GET /api/feed/timeline

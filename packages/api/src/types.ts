@@ -23,6 +23,19 @@ export interface MyIpResponse {
 // Feed Types
 // ============================================================================
 
+export type ArticleLanguage = "en" | "zh-CN";
+
+export interface ArticleTranslation {
+  id: number;
+  alias: string | null;
+  title: string | null;
+  language: ArticleLanguage;
+}
+
+export interface TranslationCandidate extends ArticleTranslation {
+  translationGroup: number | null;
+}
+
 export interface Feed {
   id: number;
   title: string | null;
@@ -33,6 +46,9 @@ export interface Feed {
   ai_summary: string;
   ai_summary_status: "idle" | "pending" | "processing" | "completed" | "failed";
   ai_summary_error: string;
+  language: ArticleLanguage;
+  translationGroup: number | null;
+  translations: ArticleTranslation[];
   hashtags: Array<{ id: number; name: string }>;
   user: {
     avatar: string | null;
@@ -50,6 +66,7 @@ export interface FeedListResponse {
     id: number;
     title: string | null;
     summary: string;
+    language: ArticleLanguage;
     hashtags: Array<{ id: number; name: string }>;
     user: {
       avatar: string | null;
@@ -80,6 +97,8 @@ export interface CreateFeedRequest {
   listed: boolean;
   createdAt?: string;
   tags: string[];
+  language?: ArticleLanguage;
+  translationOf?: number | null;
 }
 
 export interface UpdateFeedRequest {
@@ -92,6 +111,8 @@ export interface UpdateFeedRequest {
   createdAt?: string;
   tags?: string[];
   top?: number;
+  language?: ArticleLanguage;
+  translationOf?: number | null;
 }
 
 export interface AdjacentFeed {

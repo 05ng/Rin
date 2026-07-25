@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { integer, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
 
 const created_at = integer("created_at", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull();
 const updated_at = integer("updated_at", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull();
@@ -13,13 +13,18 @@ export const feeds = sqliteTable("feeds", {
     ai_summary_status: text("ai_summary_status").default("idle").notNull(),
     ai_summary_error: text("ai_summary_error").default("").notNull(),
     content: text("content").notNull(),
+    language: text("language").default("en").notNull(),
+    translationGroup: integer("translation_group"),
     listed: integer("listed").default(1).notNull(),
     draft: integer("draft").default(1).notNull(),
     top: integer("top").default(0).notNull(),
     uid: integer("uid").references(() => users.id).notNull(),
     createdAt: created_at,
     updatedAt: updated_at,
-});
+}, (table) => ({
+    languageIndex: index("idx_feeds_language").on(table.language),
+    translationGroupIndex: index("idx_feeds_translation_group").on(table.translationGroup),
+}));
 
 export const moments = sqliteTable("moments", {
     id: integer("id").primaryKey(),

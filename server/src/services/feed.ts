@@ -1,6 +1,7 @@
-import { and, asc, count, desc, eq, gt, like, lt, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, like, lt, ne, or } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { Hono } from "hono";
-import type { Variables } from "../core/hono-types";
+import type { DB, Variables } from "../core/hono-types";
 import { profileAsync } from "../core/server-timing";
 import { feeds, visits, visitStats } from "../db/schema";
 import { HyperLogLog } from "../utils/hyperloglog";
@@ -22,6 +23,83 @@ function parseFeedId(value: string): number | null {
 
     const id = Number(value);
     return Number.isSafeInteger(id) ? id : null;
+}
+
+const ARTICLE_LANGUAGES = ["en", "zh-CN"] as const;
+type ArticleLanguage = (typeof ARTICLE_LANGUAGES)[number];
+
+type TranslationGroupResolution =
+    | { group: number | null }
+    | { error: string };
+
+function parseArticleLanguage(value: unknown): ArticleLanguage | null {
+    return typeof value === "string" && ARTICLE_LANGUAGES.includes(value as ArticleLanguage)
+        ? value as ArticleLanguage
+        : null;
+}
+
+function parseTranslationOf(value: unknown): number | null | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    if (value === null || value === "") {
+        return null;
+    }
+
+    return typeof value === "number" && Number.isSafeInteger(value) && value > 0
+        ? value
+        : undefined;
+}
+
+async function resolveTranslationGroup(
+    db: DB,
+    language: ArticleLanguage,
+    translationOf: number | null,
+    currentFeedId?: number,
+): Promise<TranslationGroupResolution> {
+    if (translationOf === null) {
+        return { group: null };
+    }
+
+    const source = await db.query.feeds.findFirst({
+        where: eq(feeds.id, translationOf),
+        columns: { id: true, language: true, translationGroup: true },
+    });
+    if (!source) {
+        return { error: "Selected translation article was not found" };
+    }
+
+    if (source.id === currentFeedId) {
+        return { error: "An article cannot be its own translation" };
+    }
+
+    if (source.language === language) {
+        return { error: "A translation must use a different language" };
+    }
+
+    const group = source.translationGroup ?? source.id;
+    if (source.translationGroup === null) {
+        await db.update(feeds).set({ translationGroup: group }).where(eq(feeds.id, source.id));
+    }
+
+    const conditions = [
+        eq(feeds.translationGroup, group),
+        eq(feeds.language, language),
+    ];
+    if (currentFeedId !== undefined) {
+        conditions.push(ne(feeds.id, currentFeedId));
+    }
+
+    const existing = await db.query.feeds.findFirst({
+        where: and(...conditions),
+        columns: { id: true },
+    });
+    if (existing) {
+        return { error: "This translation group already has an article in the selected language" };
+    }
+
+    return { group };
 }
 
 async function initWPModules() {
@@ -52,6 +130,12 @@ export function FeedService(): Hono<{
         const page = c.req.query('page');
         const limit = c.req.query('limit');
         const type = c.req.query('type');
+        const languageQuery = c.req.query('language');
+        const language = languageQuery === undefined ? undefined : parseArticleLanguage(languageQuery);
+
+        if (languageQuery !== undefined && !language) {
+            return c.text('Unsupported article language', 400);
+        }
 
         if ((type === 'draft' || type === 'unlisted') && !admin) {
             return c.text('Permission denied', 403);
@@ -59,18 +143,19 @@ export function FeedService(): Hono<{
 
         const page_num = (page ? parseInt(page) > 0 ? parseInt(page) : 1 : 1) - 1;
         const limit_num = limit ? parseInt(limit) > 50 ? 50 : parseInt(limit) : 20;
-        const cacheKey = `feeds_${type}_${page_num}_${limit_num}`;
+        const cacheKey = `feeds_${type}_${language || 'all'}_${page_num}_${limit_num}`;
         const cached = await profileAsync(c, 'feed_list_cache_get', () => cache.get(cacheKey));
 
         if (cached) {
             return c.json(cached);
         }
 
-        const where = type === 'draft'
+        const visibilityWhere = type === 'draft'
             ? eq(feeds.draft, 1)
             : type === 'unlisted'
                 ? and(eq(feeds.draft, 0), eq(feeds.listed, 0))
                 : and(eq(feeds.draft, 0), eq(feeds.listed, 1));
+        const where = language ? and(visibilityWhere, eq(feeds.language, language)) : visibilityWhere;
 
         const size = await profileAsync(c, 'feed_list_count', () => db.select({ count: count() }).from(feeds).where(where));
 
@@ -119,6 +204,48 @@ export function FeedService(): Hono<{
         return c.json(data);
     });
 
+    // GET /feed/translation-candidates - List articles eligible as a translation source
+    app.get('/translation-candidates', async (c) => {
+        const db = c.get('db');
+        const admin = c.get('admin');
+        const languageQuery = c.req.query('language');
+        const language = languageQuery === undefined ? undefined : parseArticleLanguage(languageQuery);
+        const excludedId = c.req.query('exclude');
+        const exclude = excludedId === undefined ? undefined : parseFeedId(excludedId);
+
+        if (!admin) {
+            return c.text('Permission denied', 403);
+        }
+        if (languageQuery !== undefined && !language) {
+            return c.text('Unsupported article language', 400);
+        }
+        if (excludedId !== undefined && exclude === null) {
+            return c.text('Invalid article ID', 400);
+        }
+
+        const conditions: SQL[] = [];
+        if (language) {
+            conditions.push(eq(feeds.language, language));
+        }
+        if (typeof exclude === "number") {
+            conditions.push(ne(feeds.id, exclude));
+        }
+
+        const candidates = await profileAsync(c, 'feed_translation_candidates', () => db.query.feeds.findMany({
+            where: conditions.length > 0 ? and(...conditions) : undefined,
+            columns: {
+                id: true,
+                alias: true,
+                title: true,
+                language: true,
+                translationGroup: true,
+            },
+            orderBy: [desc(feeds.createdAt), desc(feeds.updatedAt)],
+            limit: 100,
+        }));
+
+        return c.json(candidates);
+    });
     // GET /feed/timeline
     app.get('/timeline', async (c) => {
         const db = c.get('db');
@@ -141,6 +268,8 @@ export function FeedService(): Hono<{
         const uid = c.get('uid');
         const body = await profileAsync(c, 'feed_create_parse', () => c.req.json());
         const { title, alias, listed, content, summary, draft, tags, createdAt } = body;
+        const language = body.language === undefined ? "en" : parseArticleLanguage(body.language);
+        const parsedTranslationOf = parseTranslationOf(body.translationOf);
 
         if (!admin) {
             return c.text('Permission denied', 403);
@@ -151,6 +280,12 @@ export function FeedService(): Hono<{
         }
         if (!content) {
             return c.text('Content is required', 400);
+        }
+        if (!language) {
+            return c.text('Unsupported article language', 400);
+        }
+        if (body.translationOf !== undefined && parsedTranslationOf === undefined) {
+            return c.text('Invalid translation article ID', 400);
         }
 
         const exist = await profileAsync(c, 'feed_create_existing', () => db.query.feeds.findFirst({
@@ -167,6 +302,13 @@ export function FeedService(): Hono<{
             return c.text('User ID is required', 400);
         }
 
+        const translation = await profileAsync(c, 'feed_create_translation_group', () =>
+            resolveTranslationGroup(db, language, parsedTranslationOf ?? null),
+        );
+        if ('error' in translation) {
+            return c.text(translation.error, 400);
+        }
+
         const result = await profileAsync(c, 'feed_create_insert', () => db.insert(feeds).values({
             title,
             content,
@@ -176,6 +318,8 @@ export function FeedService(): Hono<{
             ai_summary_error: "",
             uid,
             alias,
+            language,
+            translationGroup: translation.group,
             listed: listed ? 1 : 0,
             draft: draft ? 1 : 0,
             createdAt: date,
@@ -188,7 +332,10 @@ export function FeedService(): Hono<{
             updatedAt: date,
             resetSummary: true,
         }));
-        await profileAsync(c, 'feed_create_cache_invalidate', () => cache.deletePrefix('feeds_'));
+        await profileAsync(c, 'feed_create_cache_invalidate', async () => {
+            await cache.deletePrefix('feeds_');
+            await cache.deletePrefix('feed_');
+        });
 
         if (result.length === 0) {
             return c.text('Failed to insert', 500);
@@ -229,6 +376,20 @@ export function FeedService(): Hono<{
         if (feed.draft && feed.uid !== uid && !admin) {
             return c.text('Permission denied', 403);
         }
+
+        const translationGroup = feed.translationGroup;
+        const translations = !translationGroup
+            ? []
+            : await profileAsync(c, 'feed_detail_translations', () => db.query.feeds.findMany({
+                where: and(
+                    eq(feeds.translationGroup, translationGroup),
+                    ne(feeds.id, feed.id),
+                    eq(feeds.draft, 0),
+                    eq(feeds.listed, 1),
+                ),
+                columns: { id: true, alias: true, title: true, language: true },
+                orderBy: [asc(feeds.language)],
+            }));
 
         const { hashtags, ...other } = feed;
         const hashtags_flatten = hashtags.map((f: any) => f.hashtag);
@@ -279,7 +440,7 @@ export function FeedService(): Hono<{
             await profileAsync(c, 'feed_detail_visit_insert', () => db.insert(visits).values({ feedId: feed.id, ip: ip }));
         }
 
-        return c.json({ ...other, hashtags: hashtags_flatten, pv, uv });
+        return c.json({ ...other, hashtags: hashtags_flatten, translations, pv, uv });
     });
 
     // GET /feed/adjacent/:id
@@ -397,6 +558,43 @@ export function FeedService(): Hono<{
             return c.text('Permission denied', 403);
         }
 
+        const language = body.language === undefined
+            ? parseArticleLanguage(feed.language) || "en"
+            : parseArticleLanguage(body.language);
+        const parsedTranslationOf = parseTranslationOf(body.translationOf);
+        if (!language) {
+            return c.text('Unsupported article language', 400);
+        }
+        if (body.translationOf !== undefined && parsedTranslationOf === undefined) {
+            return c.text('Invalid translation article ID', 400);
+        }
+
+        let translationGroup = feed.translationGroup;
+        if (parsedTranslationOf !== undefined) {
+            const translation = await profileAsync(c, 'feed_update_translation_group', () =>
+                resolveTranslationGroup(db, language, parsedTranslationOf, feed.id),
+            );
+            if ('error' in translation) {
+                return c.text(translation.error, 400);
+            }
+            translationGroup = translation.group;
+        } else {
+            const existingTranslationGroup = feed.translationGroup;
+            if (language !== feed.language && existingTranslationGroup) {
+                const existingTranslation = await profileAsync(c, 'feed_update_language_conflict', () => db.query.feeds.findFirst({
+                    where: and(
+                        eq(feeds.translationGroup, existingTranslationGroup),
+                        eq(feeds.language, language),
+                        ne(feeds.id, feed.id),
+                    ),
+                    columns: { id: true },
+                }));
+                if (existingTranslation) {
+                    return c.text('This translation group already has an article in the selected language', 400);
+                }
+            }
+        }
+
         const contentChanged = content && content !== feed.content;
         const isDraft = draft !== undefined ? draft : (feed.draft === 1);
         const shouldQueueAISummary = (contentChanged && !isDraft) || (!isDraft && feed.draft === 1 && !feed.ai_summary);
@@ -410,6 +608,8 @@ export function FeedService(): Hono<{
             ai_summary_status: isDraft ? "idle" : undefined,
             ai_summary_error: shouldQueueAISummary || isDraft ? "" : undefined,
             alias,
+            language,
+            translationGroup,
             top,
             listed: listed ? 1 : 0,
             draft: draft === undefined ? undefined : draft ? 1 : 0,
@@ -429,7 +629,10 @@ export function FeedService(): Hono<{
             }));
         }
 
-        await profileAsync(c, 'feed_update_cache_invalidate', () => clearFeedCache(cache, id_num, feed.alias, alias || null));
+        await profileAsync(c, 'feed_update_cache_invalidate', async () => {
+            await clearFeedCache(cache, id_num, feed.alias, alias || null);
+            await cache.deletePrefix('feed_');
+        });
         return c.text('Updated');
     });
 
@@ -478,8 +681,24 @@ export function FeedService(): Hono<{
             return c.text('Permission denied', 403);
         }
 
+        if (feed.translationGroup === feed.id) {
+            const replacement = await profileAsync(c, 'feed_delete_translation_replacement', () => db.query.feeds.findFirst({
+                where: and(eq(feeds.translationGroup, feed.id), ne(feeds.id, feed.id)),
+                columns: { id: true },
+                orderBy: [asc(feeds.id)],
+            }));
+            if (replacement) {
+                await profileAsync(c, 'feed_delete_translation_relink', () => db.update(feeds)
+                    .set({ translationGroup: replacement.id })
+                    .where(eq(feeds.translationGroup, feed.id)));
+            }
+        }
+
         await profileAsync(c, 'feed_delete_db', () => db.delete(feeds).where(eq(feeds.id, id_num)));
-        await profileAsync(c, 'feed_delete_cache_invalidate', () => clearFeedCache(cache, id_num, feed.alias, null));
+        await profileAsync(c, 'feed_delete_cache_invalidate', async () => {
+            await clearFeedCache(cache, id_num, feed.alias, null);
+            await cache.deletePrefix('feed_');
+        });
         return c.text('Deleted');
     });
     return app;

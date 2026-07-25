@@ -86,6 +86,59 @@ describe('FeedService', () => {
             expect(data.size).toBe(0);
             expect(data.data).toEqual([]);
         });
+        it('should filter feeds by language and expose linked translations', async () => {
+            const englishResponse = await app.request('/', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer mock_token_1',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    title: 'English article',
+                    content: 'English content',
+                    language: 'en',
+                    listed: true,
+                    draft: false,
+                    tags: [],
+                }),
+            }, env);
+            expect(englishResponse.status).toBe(200);
+            const english = await englishResponse.json() as { insertedId: number };
+
+            const chineseResponse = await app.request('/', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer mock_token_1',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    title: '中文文章',
+                    content: '中文内容',
+                    language: 'zh-CN',
+                    translationOf: english.insertedId,
+                    listed: true,
+                    draft: false,
+                    tags: [],
+                }),
+            }, env);
+            expect(chineseResponse.status).toBe(200);
+            const chinese = await chineseResponse.json() as { insertedId: number };
+
+            const detailResponse = await app.request(`/${english.insertedId}`, { method: 'GET' }, env);
+            expect(detailResponse.status).toBe(200);
+            const detail = await detailResponse.json() as any;
+            expect(detail.language).toBe('en');
+            expect(detail.translations).toEqual([
+                expect.objectContaining({ id: chinese.insertedId, language: 'zh-CN' }),
+            ]);
+
+            const listResponse = await app.request('/?language=zh-CN', { method: 'GET' }, env);
+            expect(listResponse.status).toBe(200);
+            const list = await listResponse.json() as any;
+            expect(list.size).toBe(1);
+            expect(list.data[0].id).toBe(chinese.insertedId);
+            expect(list.data[0].language).toBe('zh-CN');
+        });
 
         it('should filter drafts for non-admin users', async () => {
             // Create a draft feed

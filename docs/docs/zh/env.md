@@ -83,7 +83,7 @@ Rin 部署需要配置两类环境变量：**Variables（明文变量）**和**S
 bun run mfa:secret "Rin" "admin"
 ```
 
-将输出的密钥设置为 Worker 的 `ADMIN_TOTP_SECRET`，并将同一个密钥或配置 URI 添加到身份验证器应用。不要将该值写入 `wrangler.toml` 或提交到版本库。
+使用身份验证器应用扫描终端输出的二维码，然后将输出的密钥设置为 Worker 的 `ADMIN_TOTP_SECRET`。不要将该值写入 `wrangler.toml` 或提交到版本库。
 
 ### S3 存储凭证
 
