@@ -106,7 +106,7 @@ function PreviewAvatar({
 }
 
 function PreviewName({ name, compact = false }: { name: string; compact?: boolean }) {
-  const displayName = name.trim() || "Rin";
+  const displayName = name.trim() || "Agentic Life";
   return (
     <p className={`truncate font-semibold text-neutral-900 dark:text-neutral-100 ${compact ? "max-w-16 text-[10px]" : "max-w-24 text-[10px]"}`}>
       {displayName}

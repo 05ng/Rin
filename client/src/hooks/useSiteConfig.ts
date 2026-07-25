@@ -28,7 +28,7 @@ export function useSiteConfig() {
                 : NaN;
 
     return {
-        name: config.get<string>(SITE_CONFIG_KEYS.name) || "Rin",
+        name: config.get<string>(SITE_CONFIG_KEYS.name) || "Agentic Life",
         description: config.get<string>(SITE_CONFIG_KEYS.description) || "",
         avatar: config.get<string>(SITE_CONFIG_KEYS.avatar) || "",
         pageSize: Number.isFinite(parsedPageSize) ? parsedPageSize : 5,
