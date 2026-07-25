@@ -20,8 +20,10 @@ import { Tips } from "../components/tips";
 import mermaid from "mermaid";
 import { AdjacentSection } from "../components/adjacent_feed.tsx";
 import { stripImageUrlMetadata } from "../utils/image-upload";
+import { articlePath } from "../utils/article-url";
 
 function extractFirstMarkdownImageUrl(content: string) {
+
   const match = /!\[.*?\]\((\S+?)(?:\s+"[^"]*")?\)/.exec(content);
   if (!match) {
     return undefined;
@@ -135,12 +137,16 @@ export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Elemen
     <Waiting for={feed || error}>
       {feed && (
         <Helmet>
+          <link
+            rel="canonical"
+            href={new URL(articlePath(feed.id, feed.alias), window.location.origin).toString()}
+          />
           <title>{`${feed.title ?? "Unnamed"} - ${siteConfig.name}`}</title>
           <meta property="og:site_name" content={siteName} />
           <meta property="og:title" content={feed.title ?? ""} />
           <meta property="og:image" content={headImage ?? siteConfig.avatar} />
           <meta property="og:type" content="article" />
-          <meta property="og:url" content={document.URL} />
+          <meta property="og:url" content={new URL(articlePath(feed.id, feed.alias), window.location.origin).toString()} />
           <meta
             name="og:description"
             content={
@@ -234,7 +240,7 @@ export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Elemen
                       {feed.translations?.map((translation) => (
                         <Link
                           key={translation.id}
-                          href={`/feed/${translation.id}`}
+                          href={articlePath(translation.id, translation.alias)}
                           className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-neutral-700 transition-colors hover:bg-theme hover:text-white dark:text-neutral-200"
                         >
                           {t(`article.language.${translation.language}`)}

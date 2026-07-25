@@ -16,6 +16,7 @@ import { ErrorPage } from "../page/error";
 import { FeedPage, TOCHeader } from "../page/feed";
 import { FeedsPage } from "../page/feeds";
 import { FriendsPage } from "../page/friends";
+import { GamePage, WaterFallGamePage } from "../page/game";
 import { HealthPage } from "../page/health";
 import { IsbnBarcodePage } from "../page/isbn-barcode";
 import { HashtagPage } from "../page/hashtag";
@@ -103,6 +104,14 @@ export function AppRoutes() {
 
       <AppRoute path="/profile">
         <ProfilePage />
+      </AppRoute>
+
+      <AppRoute path="/game/water-fall">
+        <WaterFallGamePage />
+      </AppRoute>
+
+      <AppRoute path="/game">
+        <GamePage />
       </AppRoute>
 
       <AppRoute path="/tools">

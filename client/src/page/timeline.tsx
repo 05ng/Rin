@@ -6,9 +6,11 @@ import { client } from "../app/runtime"
 import {useSiteConfig} from "../hooks/useSiteConfig";
 import {siteName} from "../utils/constants"
 import {useTranslation} from "react-i18next";
+import { articlePath } from "../utils/article-url";
 
 interface FeedItem {
     id: number;
+    alias: string | null;
     createdAt: Date;
     title: string | null;
 }
@@ -81,8 +83,8 @@ export function TimelinePage() {
                                     </span>
                             </h1>
                             <div className="w-full flex flex-col justify-center items-start my-4">
-                                {feeds[+year]?.map(({ id, title, createdAt }) => (
-                                    <FeedItem key={id} id={id.toString()} title={title || t('unlisted')}
+                                {feeds[+year]?.map(({ id, alias, title, createdAt }) => (
+                                    <FeedItem key={id} id={id.toString()} alias={alias} title={title || t('unlisted')}
                                               createdAt={new Date(createdAt)}/>
                                 ))}
                             </div>
@@ -94,7 +96,7 @@ export function TimelinePage() {
     )
 }
 
-export function FeedItem({ id, title, createdAt }: { id: string, title: string, createdAt: Date }) {
+export function FeedItem({ id, alias, title, createdAt }: { id: string, alias: string | null, title: string, createdAt: Date }) {
     const formatter = new Intl.DateTimeFormat('en-US', { day: '2-digit', month: '2-digit' });
     return (
         <div className="flex flex-row pl-8">
@@ -105,7 +107,7 @@ export function FeedItem({ id, title, createdAt }: { id: string, title: string, 
                 <span className="t-secondary text-sm" title={new Date(createdAt).toLocaleString()}>
                     {formatter.format(new Date(createdAt))}
                 </span>
-                <Link href={`/feed/${id}`} target="_blank" className="text-base t-primary hover:text-theme text-pretty overflow-hidden">
+                <Link href={articlePath(id, alias)} target="_blank" className="text-base t-primary hover:text-theme text-pretty overflow-hidden">
                     {title}
                 </Link>
             </div>

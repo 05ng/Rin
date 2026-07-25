@@ -253,7 +253,7 @@ export function FeedService(): Hono<{
 
         return c.json(await profileAsync(c, 'feed_timeline_db', () => db.query.feeds.findMany({
             where: where,
-            columns: { id: true, title: true, createdAt: true },
+            columns: { id: true, alias: true, title: true, createdAt: true },
             orderBy: [desc(feeds.createdAt), desc(feeds.updatedAt)],
         })));
     });
@@ -288,9 +288,9 @@ export function FeedService(): Hono<{
             return c.text('Invalid translation article ID', 400);
         }
 
-        const exist = await profileAsync(c, 'feed_create_existing', () => db.query.feeds.findFirst({
-            where: or(eq(feeds.title, title), eq(feeds.content, content))
-        }));
+       const exist = await profileAsync(c, 'feed_create_existing', () => db.query.feeds.findFirst({
+            where: eq(feeds.content, content)
+       }));
 
         if (exist) {
             return c.text('Content already exists', 400);
@@ -479,6 +479,7 @@ export function FeedService(): Hono<{
                 const cacheKey = `${feed.id}_${feedDirection}_${id_num}`;
                 const cacheData = {
                     id: feed.id,
+                    alias: feed.alias,
                     title: feed.title,
                     summary: summary,
                     hashtags: hashtags_flatten,

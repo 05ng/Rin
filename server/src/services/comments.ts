@@ -78,14 +78,17 @@ export function CommentService(): Hono {
             const { webhookUrl, webhookMethod, webhookContentType, webhookHeaders, webhookBodyTemplate } =
                 await profileAsync(c, 'comment_create_webhook_config', () => resolveWebhookConfig(serverConfig, env));
             const frontendUrl = new URL(c.req.url).origin;
+            const articleUrl = exist.alias
+                ? `${frontendUrl}/${encodeURIComponent(exist.alias)}`
+                : `${frontendUrl}/feed/${feedId}`;
             try {
                 await profileAsync(c, 'comment_create_notify', () => notify(
                     webhookUrl || "",
                     {
                         event: "comment.created",
-                        message: `${frontendUrl}/feed/${feedId}\n${user.username} 评论了: ${exist.title}\n${content}`,
+                        message: `${articleUrl}\n${user.username} 评论了: ${exist.title}\n${content}`,
                         title: exist.title || "",
-                        url: `${frontendUrl}/feed/${feedId}`,
+                        url: articleUrl,
                         username: user.username,
                         content,
                     },
@@ -120,14 +123,17 @@ export function CommentService(): Hono {
         const { webhookUrl, webhookMethod, webhookContentType, webhookHeaders, webhookBodyTemplate } =
             await profileAsync(c, 'comment_create_webhook_config', () => resolveWebhookConfig(serverConfig, env));
         const frontendUrl = new URL(c.req.url).origin;
+        const articleUrl = exist.alias
+            ? `${frontendUrl}/${encodeURIComponent(exist.alias)}`
+            : `${frontendUrl}/feed/${feedId}`;
         try {
             await profileAsync(c, 'comment_create_notify', () => notify(
                 webhookUrl || "",
                 {
                     event: "comment.created",
-                    message: `${frontendUrl}/feed/${feedId}\n游客 ${guestName} 评论了: ${exist.title}\n${content}`,
+                    message: `${articleUrl}\n游客 ${guestName} 评论了: ${exist.title}\n${content}`,
                     title: exist.title || "",
-                    url: `${frontendUrl}/feed/${feedId}`,
+                    url: articleUrl,
                     username: guestName,
                     content,
                 },

@@ -9,6 +9,7 @@ import { parseImageUrlMetadata } from "../utils/image-upload";
 import { useImageLoadState } from "../utils/use-image-load-state";
 import { type FeedCardVariant, normalizeFeedCardVariant } from "./feed-card-options";
 import { useSiteConfig } from "../hooks/useSiteConfig";
+import { articlePath } from "../utils/article-url";
 
 function FeedCardImage({ src, variant }: { src: string; variant: FeedCardVariant }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -85,7 +86,8 @@ const FEED_CARD_STYLES: Record<
 };
 
 export type FeedCardProps = {
-    id: string;
+    id: number | string;
+    alias?: string | null;
     avatar?: string;
     draft?: number;
     listed?: number;
@@ -100,7 +102,7 @@ export type FeedCardProps = {
     variant?: FeedCardVariant;
 };
 
-export function FeedCard({ id, title, avatar, draft, listed, top, language, summary, hashtags, createdAt, updatedAt, preview = false, variant }: FeedCardProps) {
+export function FeedCard({ id, alias, title, avatar, draft, listed, top, language, summary, hashtags, createdAt, updatedAt, preview = false, variant }: FeedCardProps) {
     const { t } = useTranslation();
     const siteConfig = useSiteConfig();
     const safeHashtags = Array.isArray(hashtags) ? hashtags : [];
@@ -143,5 +145,5 @@ export function FeedCard({ id, title, avatar, draft, listed, top, language, summ
         </div>
     );
 
-    return preview ? body : <Link href={`/feed/${id}`} target="_blank" className="block w-full">{body}</Link>;
+    return preview ? body : <Link href={articlePath(id, alias)} target="_blank" className="block w-full">{body}</Link>;
 }

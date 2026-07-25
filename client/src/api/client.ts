@@ -312,7 +312,7 @@ class FeedAPI {
 
   // GET /api/feed/:id
   async get(id: number | string): Promise<ApiResponse<Feed>> {
-    return this.http.get<Feed>(`/api/feed/${id}`);
+    return this.http.get<Feed>(`/api/feed/${encodeURIComponent(String(id))}`);
   }
 
   // POST /api/feed
@@ -332,7 +332,7 @@ class FeedAPI {
 
   // GET /api/feed/adjacent/:id
   async adjacent(id: number | string): Promise<ApiResponse<AdjacentFeedResponse>> {
-    return this.http.get<AdjacentFeedResponse>(`/api/feed/adjacent/${id}`);
+    return this.http.get<AdjacentFeedResponse>(`/api/feed/adjacent/${encodeURIComponent(String(id))}`);
   }
 
   // POST /api/feed/top/:id

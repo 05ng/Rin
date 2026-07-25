@@ -4,6 +4,7 @@ import { client } from "../app/runtime";
 import {timeago} from "../utils/timeago.ts";
 import {Link} from "wouter";
 import {useTranslation} from "react-i18next";
+import { articlePath } from "../utils/article-url";
 
 export function AdjacentSection({id, setError}: { id: string, setError: (error: string) => void }) {
     const [adjacentFeeds, setAdjacentFeeds] = useState<AdjacentFeedResponse>();
@@ -42,7 +43,7 @@ export function AdjacentCard({data, type}: { data: AdjacentFeed | null | undefin
         </div>);
     }
     return (
-        <Link href={`/feed/${data.id}`} target="_blank"
+        <Link href={articlePath(data.id, data.alias)} target="_blank"
               className={`w-full p-6 duration-300 bg-button ${radius}`}>
             <p className={`t-secondary w-full ${direction}`}>
                 {t(type === "previous" ? "article.previous" : "article.next")}

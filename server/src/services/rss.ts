@@ -216,6 +216,9 @@ async function generateFeed(env: Env, db: DB, frontendUrl: string, c?: AppContex
 
     for (const f of feed_list) {
         const { summary, content, user, ...other } = f;
+        const articleUrl = other.alias
+            ? `${frontendUrl}/${encodeURIComponent(other.alias)}`
+            : `${frontendUrl}/feed/${other.id}`;
         
         // Convert markdown to HTML
         let contentHtml = '';
@@ -237,7 +240,7 @@ async function generateFeed(env: Env, db: DB, frontendUrl: string, c?: AppContex
         feed.addItem({
             title: other.title || "No title",
             id: other.id?.toString() || "0",
-            link: `${frontendUrl}/feed/${other.id}`,
+            link: articleUrl,
             date: other.createdAt,
             description: summary.length > 0
                 ? summary

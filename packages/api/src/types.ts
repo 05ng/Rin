@@ -38,6 +38,7 @@ export interface TranslationCandidate extends ArticleTranslation {
 
 export interface Feed {
   id: number;
+  alias: string | null;
   title: string | null;
   content: string;
   uid: number;
@@ -64,6 +65,7 @@ export interface FeedListResponse {
   size: number;
   data: Array<{
     id: number;
+    alias: string | null;
     title: string | null;
     summary: string;
     language: ArticleLanguage;
@@ -84,6 +86,7 @@ export interface FeedListResponse {
 
 export interface TimelineItem {
   id: number;
+  alias: string | null;
   title: string | null;
   createdAt: string;
 }
@@ -117,6 +120,7 @@ export interface UpdateFeedRequest {
 
 export interface AdjacentFeed {
   id: number;
+  alias: string | null;
   title: string | null;
   summary: string;
   hashtags: Array<{ id: number; name: string }>;

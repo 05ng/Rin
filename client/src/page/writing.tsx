@@ -12,6 +12,7 @@ import { client } from "../app/runtime";
 import {Cache} from '../utils/cache';
 import {useSiteConfig} from "../hooks/useSiteConfig";
 import {siteName} from "../utils/constants";
+import { articlePath } from "../utils/article-url";
 import mermaid from 'mermaid';
 import { MarkdownEditor } from '../components/markdown_editor';
 
@@ -66,7 +67,7 @@ async function publish({
   if (data) {
     showAlert(t("publish.success"), () => {
       Cache.with().clear();
-      window.location.href = "/feed/" + data.insertedId;
+      window.location.href = articlePath(data.insertedId, alias);
     });
   }
 }
@@ -124,7 +125,7 @@ async function update({
   } else {
     showAlert(t("update.success"), () => {
       Cache.with(id).clear();
-      window.location.href = "/feed/" + id;
+      window.location.href = articlePath(id, alias);
     });
   }
 }
