@@ -1,7 +1,7 @@
 import i18n from 'i18next';
 import _ from 'lodash';
 import {useCallback, useEffect, useState} from "react";
-import {Helmet} from "react-helmet";
+import {Helmet} from "react-helmet-async";
 import {useTranslation} from "react-i18next";
 import Loading from 'react-loading';
 import {ShowAlertType, useAlert} from '../components/dialog';

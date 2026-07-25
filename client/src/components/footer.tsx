@@ -2,7 +2,7 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import Popup from 'reactjs-popup';
 import { useLocation } from 'wouter';
 import { ClientConfigContext } from '../state/config';
-import { Helmet } from "react-helmet";
+import { Helmet } from "react-helmet-async";
 import { siteName } from '../utils/constants';
 import { useTranslation } from "react-i18next";
 import { buildLoginPath, HIDDEN_LOGIN_REDIRECT } from "../utils/auth-redirect";

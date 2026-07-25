@@ -1,6 +1,6 @@
 import { SettingsCard, SettingsCardBody, SettingsCardHeader } from "@rin/ui";
 import { useMemo, useState } from "react";
-import { Helmet } from "react-helmet";
+import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import { useSiteConfig } from "../hooks/useSiteConfig";
 import { OcbcAdbCalculatorZhCnPage } from "./ocbc-adb-calculator-zh-cn";

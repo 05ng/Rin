@@ -17,12 +17,15 @@ import { FeedPage, TOCHeader } from "../page/feed";
 import { FeedsPage } from "../page/feeds";
 import { FriendsPage } from "../page/friends";
 import { HealthPage } from "../page/health";
+import { IsbnBarcodePage } from "../page/isbn-barcode";
 import { HashtagPage } from "../page/hashtag";
 import { HashtagsPage } from "../page/hashtags";
 import { LoginPage } from "../page/login";
 import { MomentsPage } from "../page/moments";
+import { MyIpPage } from "../page/my-ip";
 import { OcbcAdbCalculatorPage } from "../page/ocbc-adb-calculator";
 import { ProfilePage } from "../page/profile";
+import { QrCodePage } from "../page/qr-code";
 import { QueueStatusPage } from "../page/queue-status";
 import { SearchPage } from "../page/search";
 import { Settings } from "../page/settings";
@@ -104,6 +107,18 @@ export function AppRoutes() {
 
       <AppRoute path="/tools">
         <ToolsPage />
+      </AppRoute>
+
+      <AppRoute path="/qr-code">
+        <QrCodePage />
+      </AppRoute>
+
+      <AppRoute path="/isbn-barcode">
+        <IsbnBarcodePage />
+      </AppRoute>
+
+      <AppRoute path="/my-ip">
+        <MyIpPage />
       </AppRoute>
 
       <AppRoute path="/ocbc-adb-calculator">

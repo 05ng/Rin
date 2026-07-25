@@ -71,6 +71,8 @@
       "title$keyword": "搜索：{{keyword}}"
     },
     "title": "文章",
+    "previous": "上一篇",
+    "next": "下一篇",
     "top": {
       "confirm": "确定置顶这篇文章吗？",
       "success": "置顶成功",

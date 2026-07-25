@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { Button } from '../components/button'
-import { Helmet } from 'react-helmet'
+import { Helmet } from 'react-helmet-async'
 import { useSiteConfig } from "../hooks/useSiteConfig";
 import { siteName } from '../utils/constants'
 

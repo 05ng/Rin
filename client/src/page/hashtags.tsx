@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Helmet } from 'react-helmet';
+import { Helmet } from 'react-helmet-async';
 import { useTranslation } from "react-i18next";
 import { Link } from "wouter";
 import { HashTag } from "../components/hashtag";

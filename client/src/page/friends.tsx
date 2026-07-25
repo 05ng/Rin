@@ -1,6 +1,6 @@
 import i18next from "i18next";
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
-import { Helmet } from 'react-helmet';
+import { Helmet } from 'react-helmet-async';
 import { useTranslation } from "react-i18next";
 import Modal from 'react-modal';
 import { FlatActionButton, FlatPanel, SearchableSelect } from "@rin/ui";

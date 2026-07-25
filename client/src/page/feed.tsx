@@ -1,6 +1,6 @@
 import type { Feed } from "@rin/api";
 import { useContext, useEffect, useRef, useState } from "react";
-import { Helmet } from "react-helmet";
+import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import ReactModal from "react-modal";
 import Popup from "reactjs-popup";
@@ -292,7 +292,7 @@ export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Elemen
                   )}
                   <div className="flex flex-row items-center">
                     <img
-                      src={feed.user.avatar || "/avatar.png"}
+                      src={feed.user.avatar || "/favicon.png"}
                       className="w-8 h-8 rounded-full"
                     />
                     <div className="ml-2">
@@ -595,7 +595,7 @@ function CommentItem({
   const { t } = useTranslation();
   const profile = useContext(ProfileContext);
   const commenterName = comment.user?.username || comment.guestName || t("anonymous");
-  const commenterAvatar = comment.user?.avatar || "/avatar.png";
+  const commenterAvatar = comment.user?.avatar || "/favicon.png";
   function deleteComment() {
     showConfirm(
       t("delete.comment.title"),

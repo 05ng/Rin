@@ -1,5 +1,5 @@
 import { useContext, useEffect, useRef, useState } from "react"
-import { Helmet } from 'react-helmet'
+import { Helmet } from 'react-helmet-async'
 import { client } from "../app/runtime"
 
 import { useSiteConfig } from "../hooks/useSiteConfig";

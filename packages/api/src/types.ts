@@ -15,6 +15,10 @@ export interface RequestOptions {
   headers?: Record<string, string>;
 }
 
+export interface MyIpResponse {
+  ip: string | null;
+}
+
 // ============================================================================
 // Feed Types
 // ============================================================================
@@ -316,6 +320,9 @@ export const API_PATHS = {
   FEED_DELETE: (id: number) => `/api/feed/${id}`,
   FEED_ADJACENT: (id: number | string) => `/api/feed/adjacent/${id}`,
   FEED_SET_TOP: (id: number) => `/api/feed/top/${id}`,
+
+  // My IP
+  MY_IP: '/api/my-ip',
 
   // Auth
   AUTH_STATUS: '/api/auth/status',

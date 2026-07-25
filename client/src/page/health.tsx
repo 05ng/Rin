@@ -2,7 +2,7 @@ import { SettingsBadge, SettingsCard, SettingsCardBody, SettingsCardHeader } fro
 import type { ConfigHealthItem } from "../api/client";
 import { client } from "../app/runtime";
 import { useEffect, useMemo, useState } from "react";
-import { Helmet } from "react-helmet";
+import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import ReactLoading from "react-loading";
 import { useSiteConfig } from "../hooks/useSiteConfig";

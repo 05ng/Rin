@@ -71,6 +71,8 @@
       "title$keyword": "Search: {{keyword}}"
     },
     "title": "Articles",
+    "previous": "Previous",
+    "next": "Next",
     "top": {
       "confirm": "Are you sure you want to top this article?",
       "success": "Topped successfully",

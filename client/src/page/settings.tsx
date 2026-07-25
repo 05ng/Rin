@@ -1,6 +1,6 @@
 import { SearchableSelect, SettingsBadge, SettingsCard, SettingsCardBody, SettingsCardHeader, SettingsCardRow } from "@rin/ui";
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Helmet } from "react-helmet";
+import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import ReactLoading from "react-loading";
 import Modal from "react-modal";
