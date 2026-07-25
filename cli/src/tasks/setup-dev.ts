@@ -109,6 +109,8 @@ S3_SECRET_ACCESS_KEY=${env.S3_SECRET_ACCESS_KEY}
 `,
   );
 
+  fs.mkdirSync(path.join(rootDir, "dist", "client"), { recursive: true });
+
   console.log("✅ 已生成 wrangler.toml");
   console.log("✅ 已生成 client/.env");
   console.log("✅ 已生成 .dev.vars");
