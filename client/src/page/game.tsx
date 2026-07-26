@@ -97,6 +97,9 @@ export function GamePage() {
       <Link href='/game/penalty-kick' className='group rounded-2xl border border-black/10 bg-white p-5 transition hover:-translate-y-0.5 hover:border-theme/40 hover:shadow-md dark:border-white/10 dark:bg-dark'>
         <div className='flex items-start gap-4'><span className='flex size-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-xs font-bold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200'>⚽</span><div><h2 className='font-semibold text-neutral-900 group-hover:text-theme dark:text-white'>{t("penalty_kick_title", "Penalty Kick")}</h2><p className='mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300'>{t("penalty_kick_card_description", "Swipe and hold to score a goal against the moving keeper!")}</p><span className='mt-4 inline-flex text-sm font-medium text-theme'>{t("water_fall_play_now", "Play Now")}</span></div></div>
       </Link>
+      <Link href='/game/math-practice' className='group rounded-2xl border border-black/10 bg-white p-5 transition hover:-translate-y-0.5 hover:border-theme/40 hover:shadow-md dark:border-white/10 dark:bg-dark'>
+        <div className='flex items-start gap-4'><span className='flex size-11 shrink-0 items-center justify-center rounded-xl bg-purple-100 text-xs font-bold text-purple-700 dark:bg-purple-900/30 dark:text-purple-200'>🧮</span><div><h2 className='font-semibold text-neutral-900 group-hover:text-theme dark:text-white'>{t("math_practice_title", "Math Practice")}</h2><p className='mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300'>{t("math_practice_card_description", "Practice your mental math speed and accuracy with 10 questions!")}</p><span className='mt-4 inline-flex text-sm font-medium text-theme'>{t("water_fall_play_now", "Play Now")}</span></div></div>
+      </Link>
     </div>
   </main>;
 }
