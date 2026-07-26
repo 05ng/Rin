@@ -352,22 +352,42 @@ export function FeedService(): Hono<{
         const admin = c.get('admin');
         const uid = c.get('uid');
         const id = c.req.param('id');
+        const languageQuery = c.req.query('language');
+        const language = languageQuery === undefined ? undefined : parseArticleLanguage(languageQuery);
+        
         const id_num = parseFeedId(id);
-        const cacheKey = id_num === null ? `feed_alias_${id}` : `feed_id_${id_num}`;
+        const cacheKey = id_num === null 
+            ? language ? `feed_alias_${id}_${language}` : `feed_alias_${id}`
+            : `feed_id_${id_num}`;
+            
         const where = id_num === null ? eq(feeds.alias, id) : eq(feeds.id, id_num);
 
-        const feed = await profileAsync(c, 'feed_detail_cache_db', () => cache.getOrSet(cacheKey, () => db.query.feeds.findFirst({
-            where,
-            with: {
-                hashtags: {
-                    columns: {},
-                    with: {
-                        hashtag: { columns: { id: true, name: true } }
-                    }
-                },
-                user: { columns: { id: true, username: true, avatar: true } }
+        const feed = await profileAsync(c, 'feed_detail_cache_db', () => cache.getOrSet(cacheKey, async () => {
+            const queryOptions = {
+                with: {
+                    hashtags: {
+                        columns: {},
+                        with: {
+                            hashtag: { columns: { id: true, name: true } }
+                        }
+                    },
+                    user: { columns: { id: true, username: true, avatar: true } }
+                }
+            };
+
+            if (id_num === null && language) {
+                const specificFeed = await db.query.feeds.findFirst({
+                    where: and(eq(feeds.alias, id), eq(feeds.language, language)),
+                    ...queryOptions
+                });
+                if (specificFeed) return specificFeed;
             }
-        })));
+            
+            return db.query.feeds.findFirst({
+                where,
+                ...queryOptions
+            });
+        }));
 
         if (!feed) {
             return c.text('Not found', 404);

@@ -311,8 +311,9 @@ class FeedAPI {
   }
 
   // GET /api/feed/:id
-  async get(id: number | string): Promise<ApiResponse<Feed>> {
-    return this.http.get<Feed>(`/api/feed/${encodeURIComponent(String(id))}`);
+  async get(id: number | string, language?: ArticleLanguage | string): Promise<ApiResponse<Feed>> {
+    const query = language ? `?language=${language}` : "";
+    return this.http.get<Feed>(`/api/feed/${encodeURIComponent(String(id))}${query}`);
   }
 
   // POST /api/feed

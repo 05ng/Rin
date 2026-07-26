@@ -33,7 +33,8 @@ function extractFirstMarkdownImageUrl(content: string) {
 }
 
 export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Element, clean: (id: string) => void }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const language = i18n.resolvedLanguage;
   const siteConfig = useSiteConfig();
   const profile = useContext(ProfileContext);
   const [feed, setFeed] = useState<Feed>();
@@ -90,12 +91,12 @@ export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Elemen
       })
   }
   useEffect(() => {
-    if (ref.current == id) return;
+    if (ref.current === `${id}_${language}`) return;
     setFeed(undefined);
     setError(undefined);
     setHeadImage(undefined);
     client.feed
-      .get(id)
+      .get(id, language)
       .then(({ data, error }) => {
         if (error) {
           setError(error.value as string);
@@ -111,8 +112,8 @@ export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Elemen
           }, 0);
         }
       });
-    ref.current = id;
-  }, [id]);
+    ref.current = `${id}_${language}`;
+  }, [id, language]);
   useEffect(() => {
     mermaid.initialize({
       startOnLoad: false,
@@ -240,6 +241,7 @@ export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Elemen
                       {feed.translations?.map((translation) => (
                         <Link
                           key={translation.id}
+                          onClick={() => i18n.changeLanguage(translation.language)}
                           href={articlePath(translation.id, translation.alias)}
                           className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-neutral-700 transition-colors hover:bg-theme hover:text-white dark:text-neutral-200"
                         >
