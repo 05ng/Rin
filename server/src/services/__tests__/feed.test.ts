@@ -642,4 +642,80 @@ describe('FeedService', () => {
             expect(res.status).toBe(404);
         });
     });
+
+    describe('Language Filtering Features', () => {
+        it('should prioritize language when getting feed by shared alias', async () => {
+            const englishResponse = await app.request('/', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer mock_token_1', 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: 'Alias EN', alias: 'shared-alias', content: 'English', language: 'en', listed: true, draft: false, tags: []
+                })
+            }, env);
+            const english = await englishResponse.json() as { insertedId: number };
+
+            await app.request('/', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer mock_token_1', 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: 'Alias ZH', alias: 'shared-alias', content: 'Chinese', language: 'zh-CN', translationOf: english.insertedId, listed: true, draft: false, tags: []
+                })
+            }, env);
+
+            const enRes = await app.request('/shared-alias?language=en', { method: 'GET' }, env);
+            const enData = await enRes.json() as any;
+            expect(enData.title).toBe('Alias EN');
+
+            const zhRes = await app.request('/shared-alias?language=zh-CN', { method: 'GET' }, env);
+            const zhData = await zhRes.json() as any;
+            expect(zhData.title).toBe('Alias ZH');
+        });
+
+        it('should filter timeline by language if provided', async () => {
+            const englishResponse = await app.request('/', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer mock_token_1', 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: 'Timeline EN', content: 'English', language: 'en', listed: true, draft: false, tags: []
+                })
+            }, env);
+            const english = await englishResponse.json() as { insertedId: number };
+
+            await app.request('/', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer mock_token_1', 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: 'Timeline ZH', content: 'Chinese', language: 'zh-CN', translationOf: english.insertedId, listed: true, draft: false, tags: []
+                })
+            }, env);
+
+            const zhRes = await app.request('/timeline?language=zh-CN', { method: 'GET' }, env);
+            const zhData = await zhRes.json() as any[];
+            expect(zhData.some((f: any) => f.title === 'Timeline ZH')).toBe(true);
+            expect(zhData.some((f: any) => f.title === 'Timeline EN')).toBe(false);
+        });
+
+        it('should filter search results by language if provided', async () => {
+            await app.request('/', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer mock_token_1', 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: 'Searchable EN', content: 'Searchable content', language: 'en', listed: true, draft: false, tags: []
+                })
+            }, env);
+
+            await app.request('/', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer mock_token_1', 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: 'Searchable ZH', content: 'Searchable content', language: 'zh-CN', listed: true, draft: false, tags: []
+                })
+            }, env);
+
+            const enRes = await app.request('/Searchable?language=en', { method: 'GET' }, env);
+            const enData = await enRes.json() as any;
+            expect(enData.data.some((f: any) => f.title === 'Searchable EN')).toBe(true);
+            expect(enData.data.some((f: any) => f.title === 'Searchable ZH')).toBe(false);
+        });
+    });
 });

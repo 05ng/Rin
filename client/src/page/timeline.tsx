@@ -18,11 +18,12 @@ interface FeedItem {
 export function TimelinePage() {
     const [feeds, setFeeds] = useState<Partial<Record<number, FeedItem[]>>>()
     const [length, setLength] = useState(0)
-    const ref = useRef(false)
-    const { t } = useTranslation()
+    const ref = useRef("")
+    const { t, i18n } = useTranslation()
     const siteConfig = useSiteConfig();
+    const language = i18n.resolvedLanguage === "zh-CN" ? "zh-CN" : "en";
     function fetchFeeds() {
-        client.feed.timeline()
+        client.feed.timeline(language)
         .then(({ data }) => {
             if (data) {
                 const arr = Array.isArray(data) ? data : []
@@ -46,10 +47,11 @@ export function TimelinePage() {
     }
 
     useEffect(() => {
-        if (ref.current) return
+        const key = `${language}`
+        if (ref.current === key) return
         fetchFeeds()
-        ref.current = true
-    }, [])
+        ref.current = key
+    }, [language])
     return (
         <>
             <Helmet>

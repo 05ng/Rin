@@ -306,8 +306,9 @@ class FeedAPI {
   }
 
   // GET /api/feed/timeline
-  async timeline(): Promise<ApiResponse<TimelineItem[]>> {
-    return this.http.get<TimelineItem[]>("/api/feed/timeline");
+  async timeline(language?: string): Promise<ApiResponse<TimelineItem[]>> {
+    const query = language ? `?language=${language}` : "";
+    return this.http.get<TimelineItem[]>(`/api/feed/timeline${query}`);
   }
 
   // GET /api/feed/:id
@@ -598,10 +599,11 @@ class SearchAPI {
   constructor(private http: HttpClient) {}
 
   // GET /api/search/:keyword
-  async search(keyword: string, params?: { page?: number; limit?: number }): Promise<ApiResponse<FeedListResponse>> {
+  async search(keyword: string, params?: { page?: number; limit?: number; language?: string }): Promise<ApiResponse<FeedListResponse>> {
     const searchParams = new URLSearchParams();
     if (params?.page) searchParams.set("page", params.page.toString());
     if (params?.limit) searchParams.set("limit", params.limit.toString());
+    if (params?.language) searchParams.set("language", params.language);
 
     const query = searchParams.toString();
     return this.http.get<FeedListResponse>(`/api/search/${encodeURIComponent(keyword)}${query ? `?${query}` : ""}`);

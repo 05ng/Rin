@@ -17,7 +17,8 @@ type FeedsData = {
 }
 
 export function SearchPage({ keyword }: { keyword: string }) {
-    const { t } = useTranslation()
+    const { t, i18n } = useTranslation()
+    const language = i18n.resolvedLanguage === "zh-CN" ? "zh-CN" : "en";
     const siteConfig = useSiteConfig();
     const query = new URLSearchParams(useSearch());
     const [status, setStatus] = useState<'loading' | 'idle'>('idle')
@@ -32,6 +33,7 @@ export function SearchPage({ keyword }: { keyword: string }) {
         client.search.search(keyword, {
             page,
             limit,
+            language,
         }).then(({ data }) => {
             if (data) {
                 setFeeds(data)
@@ -40,12 +42,12 @@ export function SearchPage({ keyword }: { keyword: string }) {
         })
     }
     useEffect(() => {
-        const key = `${page} ${limit} ${keyword}`
+        const key = `${page} ${limit} ${keyword} ${language}`
         if (ref.current == key) return
         setStatus('loading')
         fetchFeeds()
         ref.current = key
-    }, [page, limit, keyword])
+    }, [page, limit, keyword, language])
     const title = t('article.search.title$keyword', { keyword })
     return (
         <>

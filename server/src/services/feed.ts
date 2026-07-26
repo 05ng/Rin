@@ -249,7 +249,12 @@ export function FeedService(): Hono<{
     // GET /feed/timeline
     app.get('/timeline', async (c) => {
         const db = c.get('db');
-        const where = and(eq(feeds.draft, 0), eq(feeds.listed, 1));
+        const languageQuery = c.req.query('language');
+        const language = languageQuery === undefined ? undefined : parseArticleLanguage(languageQuery);
+        let where = and(eq(feeds.draft, 0), eq(feeds.listed, 1));
+        if (language) {
+            where = and(where, eq(feeds.language, language));
+        }
 
         return c.json(await profileAsync(c, 'feed_timeline_db', () => db.query.feeds.findMany({
             where: where,
@@ -751,14 +756,21 @@ export function SearchService(): Hono<{
             return c.json({ size: 0, data: [], hasNext: false });
         }
 
-        const cacheKey = `search_${keyword}`;
+        const languageQuery = c.req.query('language');
+        const language = languageQuery === undefined ? undefined : parseArticleLanguage(languageQuery);
+
+        const cacheKey = language ? `search_${keyword}_${language}` : `search_${keyword}`;
         const searchKeyword = `%${keyword}%`;
-        const whereClause = or(
+        let whereClause = or(
             like(feeds.title, searchKeyword),
             like(feeds.content, searchKeyword),
             like(feeds.summary, searchKeyword),
             like(feeds.alias, searchKeyword)
-        );
+        ) as any;
+
+        if (language) {
+            whereClause = and(whereClause, eq(feeds.language, language));
+        }
 
         const feed_list = (await profileAsync(c, 'feed_search_cache_db', () => cache.getOrSet(cacheKey, () => db.query.feeds.findMany({
             where: admin ? whereClause : and(whereClause, eq(feeds.draft, 0)),
