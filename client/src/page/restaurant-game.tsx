@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useContext, useCallback } from "react";
+import { useState, useEffect, useRef, useContext } from "react";
 import { client } from "../app/runtime";
 import { ProfileContext } from "../state/profile";
 
