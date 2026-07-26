@@ -681,6 +681,19 @@ class RSSAPI {
 // Main API Client Class
 // ============================================================================
 
+
+class GameAPI {
+  constructor(private http: HttpClient) {}
+  
+  async loadRestaurantState(): Promise<ApiResponse<import('@rin/api').RestaurantGameState | null>> {
+    return this.http.get('/api/game/restaurant');
+  }
+  
+  async saveRestaurantState(state: import('@rin/api').RestaurantGameState): Promise<ApiResponse<void>> {
+    return this.http.post('/api/game/restaurant', state);
+  }
+}
+
 export class ApiClient {
   private http: HttpClient;
   feed: FeedAPI;
@@ -696,6 +709,7 @@ export class ApiClient {
   auth: AuthAPI;
   wp: WordPressAPI;
   rss: RSSAPI;
+  game: GameAPI;
 
   constructor(baseUrl: string) {
     this.http = new HttpClient(baseUrl);
@@ -712,6 +726,7 @@ export class ApiClient {
     this.auth = new AuthAPI(this.http);
     this.wp = new WordPressAPI(this.http);
     this.rss = new RSSAPI(baseUrl);
+    this.game = new GameAPI(this.http);
   }
 }
 

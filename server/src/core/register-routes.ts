@@ -11,6 +11,7 @@ import { RSSService } from "../services/rss";
 import { BlobService, StorageService } from "../services/storage";
 import { TagService } from "../services/tag";
 import { UserService } from "../services/user";
+import { GameService } from "../services/game";
 
 export function registerRoutes(app: RinApp) {
   app.get("/", (c) => c.text("Hi"));
@@ -26,6 +27,7 @@ export function registerRoutes(app: RinApp) {
   app.route("/moments", MomentsService());
   app.route("/my-ip", MyIpService());
   app.route("/user", UserService());
+  app.route("/game", GameService());
   app.route("/auth", PasswordAuthService());
   app.route("/config", ConfigService());
   app.route("/", RSSService());

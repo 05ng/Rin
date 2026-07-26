@@ -103,6 +103,9 @@ export function GamePage() {
       <Link href='/game/minecraft' className='group rounded-2xl border border-black/10 bg-white p-5 transition hover:-translate-y-0.5 hover:border-theme/40 hover:shadow-md dark:border-white/10 dark:bg-dark'>
         <div className='flex items-start gap-4'><span className='flex size-11 shrink-0 items-center justify-center rounded-xl bg-green-100 text-xs font-bold text-green-700 dark:bg-green-900/30 dark:text-green-200'>🧊</span><div><h2 className='font-semibold text-neutral-900 group-hover:text-theme dark:text-white'>{t("minecraft_title", "Voxel Builder")}</h2><p className='mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300'>{t("minecraft_card_description", "Build your own 3D voxel world with blocks!")}</p><span className='mt-4 inline-flex text-sm font-medium text-theme'>{t("water_fall_play_now", "Play Now")}</span></div></div>
       </Link>
+      <Link href='/game/restaurant' className='group rounded-2xl border border-black/10 bg-white p-5 transition hover:-translate-y-0.5 hover:border-theme/40 hover:shadow-md dark:border-white/10 dark:bg-dark'>
+        <div className='flex items-start gap-4'><span className='flex size-11 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-xs font-bold text-orange-700 dark:bg-orange-900/30 dark:text-orange-200'>🍔</span><div><h2 className='font-semibold text-neutral-900 group-hover:text-theme dark:text-white'>{t("restaurant_title", "Burger Shop")}</h2><p className='mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300'>{t("restaurant_card_description", "Run your own burger shop! Serve customers, upgrade tables, and hire helpers.")}</p><span className='mt-4 inline-flex text-sm font-medium text-theme'>{t("water_fall_play_now", "Play Now")}</span></div></div>
+      </Link>
     </div>
   </main>;
 }

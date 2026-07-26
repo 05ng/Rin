@@ -883,6 +883,8 @@
   "minecraft_block_dirt": "泥土",
   "minecraft_block_wood": "原木",
   "minecraft_block_glass": "玻璃",
+  "restaurant_title": "汉堡店",
+  "restaurant_card_description": "经营你自己的汉堡店！为顾客服务，升级桌子，雇佣帮手。",
   "ai_translate": {
     "button": "AI 翻译",
     "tooltip": "使用 AI 自动翻译为简体中文"

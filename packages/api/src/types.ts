@@ -431,3 +431,10 @@ export const API_PATHS = {
 } as const;
 
 export type APIEndpoint = typeof API_PATHS;
+
+// Game Types
+export interface RestaurantGameState {
+  money: number;
+  tables: number;
+  helpers: number;
+}

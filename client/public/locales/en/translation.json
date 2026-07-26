@@ -882,6 +882,8 @@
   "minecraft_block_dirt": "Dirt",
   "minecraft_block_wood": "Wood",
   "minecraft_block_glass": "Glass",
+  "restaurant_title": "Burger Shop",
+  "restaurant_card_description": "Run your own burger shop! Serve customers, upgrade tables, and hire helpers.",
   "ai_translate": {
     "button": "AI Translate",
     "tooltip": "Automatically translate to Simplified Chinese using AI"
