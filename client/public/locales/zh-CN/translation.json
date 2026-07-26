@@ -873,5 +873,14 @@
   "water_fall_todo": "\u5f85\u5b8c\u6210",
   "water_fall_won": "\u9c7c\u513f\u81ea\u7531\u4e86\uff01",
   "water_fall_ready": "\u4e00\u5207\u5c31\u7eea\u3002\u5f00\u59cb\u653e\u6c34\u5427\u3002",
-  "water_fall_incomplete": "\u5b8c\u6210\u8fd9\u4e09\u4e2a\u6b65\u9aa4\u540e\u5373\u53ef\u5f00\u59cb\u653e\u6c34\u3002"
+  "water_fall_incomplete": "\u5b8c\u6210\u8fd9\u4e09\u4e2a\u6b65\u9aa4\u540e\u5373\u53ef\u5f00\u59cb\u653e\u6c34\u3002",
+  "minecraft_title": "体素建造",
+  "minecraft_card_description": "用方块建造你自己的3D体素世界！",
+  "minecraft_reset": "重置世界",
+  "minecraft_build": "建造",
+  "minecraft_destroy": "破坏",
+  "minecraft_block_grass": "草方块",
+  "minecraft_block_dirt": "泥土",
+  "minecraft_block_wood": "原木",
+  "minecraft_block_glass": "玻璃"
 }

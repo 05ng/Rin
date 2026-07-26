@@ -19,6 +19,7 @@ import { FriendsPage } from "../page/friends";
 import { GamePage, WaterFallGamePage } from "../page/game";
 import { PenaltyKickGamePage } from "../page/penalty-kick";
 import { MathPracticeGamePage } from "../page/math-practice";
+import { MinecraftGamePage } from "../page/minecraft";
 import { HealthPage } from "../page/health";
 import { IsbnBarcodePage } from "../page/isbn-barcode";
 import { HashtagPage } from "../page/hashtag";
@@ -118,6 +119,10 @@ export function AppRoutes() {
 
       <AppRoute path="/game/math-practice">
         <MathPracticeGamePage />
+      </AppRoute>
+
+      <AppRoute path="/game/minecraft">
+        <MinecraftGamePage />
       </AppRoute>
 
       <AppRoute path="/game">

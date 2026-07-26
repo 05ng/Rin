@@ -872,5 +872,14 @@
   "water_fall_todo": "TODO",
   "water_fall_won": "The fish found freedom!",
   "water_fall_ready": "Everything is ready. Start the water.",
-  "water_fall_incomplete": "Complete the three steps to unlock the water flow."
+  "water_fall_incomplete": "Complete the three steps to unlock the water flow.",
+  "minecraft_title": "Voxel Builder",
+  "minecraft_card_description": "Build your own 3D voxel world with blocks!",
+  "minecraft_reset": "Reset World",
+  "minecraft_build": "Build",
+  "minecraft_destroy": "Destroy",
+  "minecraft_block_grass": "Grass",
+  "minecraft_block_dirt": "Dirt",
+  "minecraft_block_wood": "Wood",
+  "minecraft_block_glass": "Glass"
 }

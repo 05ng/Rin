@@ -6,10 +6,10 @@ import { useSiteConfig } from '../hooks/useSiteConfig';
 
 type Point = { x: number; y: number };
 type Direction = 'up' | 'right' | 'down' | 'left';
-type PipeType = 'straight' | 'elbow' | 'tee';
+type PipeType = 'straight' | 'elbow' | 'tee' | 'cross';
 type Pipe = { id: number; type: PipeType; x: number; y: number; rotation: number };
 type Port = { id: number; direction: Direction; x: number; y: number };
-type Drag = { type: 'pipe'; pipeType: PipeType; id?: number; point: Point; rotation: number } | { type: 'pool'; point: Point };
+type DragState = { type: 'pipe'; pipeType: PipeType; id?: number; point: Point; rotation: number } | { type: 'pool'; point: Point };
 
 const WIDTH = 1000;
 const HEIGHT = 600;
@@ -99,6 +99,9 @@ export function GamePage() {
       </Link>
       <Link href='/game/math-practice' className='group rounded-2xl border border-black/10 bg-white p-5 transition hover:-translate-y-0.5 hover:border-theme/40 hover:shadow-md dark:border-white/10 dark:bg-dark'>
         <div className='flex items-start gap-4'><span className='flex size-11 shrink-0 items-center justify-center rounded-xl bg-purple-100 text-xs font-bold text-purple-700 dark:bg-purple-900/30 dark:text-purple-200'>🧮</span><div><h2 className='font-semibold text-neutral-900 group-hover:text-theme dark:text-white'>{t("math_practice_title", "Math Practice")}</h2><p className='mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300'>{t("math_practice_card_description", "Practice your mental math speed and accuracy with 10 questions!")}</p><span className='mt-4 inline-flex text-sm font-medium text-theme'>{t("water_fall_play_now", "Play Now")}</span></div></div>
+      </Link>
+      <Link href='/game/minecraft' className='group rounded-2xl border border-black/10 bg-white p-5 transition hover:-translate-y-0.5 hover:border-theme/40 hover:shadow-md dark:border-white/10 dark:bg-dark'>
+        <div className='flex items-start gap-4'><span className='flex size-11 shrink-0 items-center justify-center rounded-xl bg-green-100 text-xs font-bold text-green-700 dark:bg-green-900/30 dark:text-green-200'>🧊</span><div><h2 className='font-semibold text-neutral-900 group-hover:text-theme dark:text-white'>{t("minecraft_title", "Voxel Builder")}</h2><p className='mt-1 text-sm leading-6 text-neutral-600 dark:text-neutral-300'>{t("minecraft_card_description", "Build your own 3D voxel world with blocks!")}</p><span className='mt-4 inline-flex text-sm font-medium text-theme'>{t("water_fall_play_now", "Play Now")}</span></div></div>
       </Link>
     </div>
   </main>;
