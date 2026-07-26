@@ -64,13 +64,6 @@ export function MathPracticeGamePage() {
   const [currentTime, setCurrentTime] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-focus input when moving to a new question
-  useEffect(() => {
-    if (gameState === 'playing' && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [gameState, currentIndex]);
-
   // Live timer
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -188,17 +181,36 @@ export function MathPracticeGamePage() {
           <div className='flex items-center gap-4'>
             <input
               ref={inputRef}
-              type="number"
+              type="text"
+              readOnly
               value={currentInput}
-              onChange={(e) => setCurrentInput(e.target.value)}
-              className='w-48 sm:w-64 text-center text-4xl sm:text-5xl font-bold py-4 rounded-2xl border-4 border-sky-200 focus:border-theme bg-white dark:bg-dark dark:border-sky-800 dark:text-white outline-none shadow-inner transition-colors'
+              className='w-48 sm:w-64 text-center text-4xl sm:text-5xl font-bold py-4 rounded-2xl border-4 border-sky-200 focus:border-theme bg-white dark:bg-dark dark:border-sky-800 dark:text-white outline-none shadow-inner transition-colors cursor-default select-none'
               placeholder="?"
-              autoComplete="off"
             />
-            <button 
-              type="submit" 
+          </div>
+          
+          <div className='mt-8 grid grid-cols-6 gap-2 sm:gap-4 w-full max-w-xl px-2'>
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map((num) => (
+              <button
+                key={num}
+                type="button"
+                onClick={() => setCurrentInput(prev => prev + num)}
+                className='flex items-center justify-center h-14 sm:h-16 rounded-xl sm:rounded-2xl bg-white dark:bg-slate-800 border-2 border-sky-100 dark:border-sky-900 shadow-sm text-2xl sm:text-3xl font-bold text-neutral-700 dark:text-neutral-200 hover:bg-sky-50 dark:hover:bg-slate-700 active:scale-95 transition-all'
+              >
+                {num}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setCurrentInput(prev => prev.slice(0, -1))}
+              className='flex items-center justify-center h-14 sm:h-16 rounded-xl sm:rounded-2xl bg-rose-50 dark:bg-rose-900/30 border-2 border-rose-200 dark:border-rose-900/50 shadow-sm text-2xl text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 active:scale-95 transition-all'
+            >
+              <i className="ri-delete-back-2-line"></i>
+            </button>
+            <button
+              type="submit"
               disabled={!currentInput.trim()}
-              className='flex items-center justify-center h-20 px-6 sm:px-8 rounded-2xl bg-theme hover:bg-theme/90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xl sm:text-2xl shadow-sm transition-transform hover:-translate-y-0.5 active:translate-y-0'
+              className='flex items-center justify-center h-14 sm:h-16 rounded-xl sm:rounded-2xl bg-theme hover:bg-theme/90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-lg sm:text-xl shadow-sm transition-transform hover:-translate-y-0.5 active:translate-y-0'
             >
               {t('math_practice_ok', 'OK')}
             </button>
