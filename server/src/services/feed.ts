@@ -7,6 +7,7 @@ import { feeds, visits, visitStats } from "../db/schema";
 import { HyperLogLog } from "../utils/hyperloglog";
 import { extractImageWithMetadata } from "../utils/image";
 import { stripMarkdown } from "../utils/markdown";
+import { generateAITranslationResult } from "../utils/ai";
 import { syncFeedAISummaryQueueState } from "./feed-ai-summary";
 import { bindTagToPost } from "./tag";
 import { clearFeedCache } from "./clear-feed-cache";
@@ -261,6 +262,59 @@ export function FeedService(): Hono<{
             columns: { id: true, alias: true, title: true, createdAt: true },
             orderBy: [desc(feeds.createdAt), desc(feeds.updatedAt)],
         })));
+    });
+
+    // POST /feed/translate - Translate feed content
+    app.post('/translate', async (c) => {
+        const admin = c.get('admin');
+        if (!admin) {
+            return c.text('Permission denied', 403);
+        }
+
+        let body;
+        try {
+            body = await c.req.json();
+        } catch (e) {
+            return c.text('Invalid JSON payload', 400);
+        }
+
+        const { title, summary, content } = body;
+        if (!title || !content) {
+            return c.text('Title and content are required', 400);
+        }
+
+        const env = c.get('env');
+        const serverConfig = c.get('serverConfig');
+
+        // Translate components
+        const titleRes = await generateAITranslationResult(env, serverConfig, title);
+        
+        if (titleRes.skipped) {
+            return c.json({
+                error: {
+                    status: 400,
+                    value: "AI features are disabled. Please enable them in settings."
+                }
+            }, 400);
+        }
+
+        const summaryRes = summary ? await generateAITranslationResult(env, serverConfig, summary) : { translation: "" };
+        const contentRes = await generateAITranslationResult(env, serverConfig, content);
+
+        if (titleRes.error || contentRes.error) {
+            return c.json({
+                error: {
+                    status: 500,
+                    value: titleRes.error || contentRes.error
+                }
+            }, 500);
+        }
+
+        return c.json({
+            title: titleRes.translation,
+            summary: summaryRes.translation,
+            content: contentRes.translation
+        });
     });
 
     // POST /feed - Create feed

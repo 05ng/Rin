@@ -24,7 +24,7 @@ function createViteArgs(port: number) {
 }
 
 function createWranglerArgs(port: number) {
-  return [bunExec, "x", "wrangler", "dev", "--port", String(port), "--test-scheduled"];
+  return [bunExec, "x", "wrangler", "dev", "--port", String(port), "--ip", "127.0.0.1", "--test-scheduled"];
 }
 
 function createViteEnv(serverPort?: number) {

@@ -42,6 +42,12 @@ export const feedSetTopSchema = t.Object({
   top: t.Numeric(),
 });
 
+export const feedTranslateSchema = t.Object({
+  title: t.String(),
+  summary: t.String({ optional: true }),
+  content: t.String(),
+});
+
 // ============================================================================
 // Auth Schemas
 // ============================================================================

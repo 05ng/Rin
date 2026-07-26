@@ -118,6 +118,18 @@ export interface UpdateFeedRequest {
   translationOf?: number | null;
 }
 
+export interface TranslateFeedRequest {
+  title: string;
+  summary?: string;
+  content: string;
+}
+
+export interface TranslateFeedResponse {
+  title: string;
+  summary: string;
+  content: string;
+}
+
 export interface AdjacentFeed {
   id: number;
   alias: string | null;
@@ -352,6 +364,7 @@ export const API_PATHS = {
   FEED_DELETE: (id: number) => `/api/feed/${id}`,
   FEED_ADJACENT: (id: number | string) => `/api/feed/adjacent/${id}`,
   FEED_SET_TOP: (id: number) => `/api/feed/top/${id}`,
+  FEED_TRANSLATE: '/api/feed/translate',
 
   // My IP
   MY_IP: '/api/my-ip',

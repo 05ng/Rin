@@ -13,6 +13,8 @@ import type {
   TimelineItem,
   CreateFeedRequest,
   UpdateFeedRequest,
+  TranslateFeedRequest,
+  TranslateFeedResponse,
   AdjacentFeedResponse,
   UserProfile,
   UpdateProfileRequest,
@@ -321,6 +323,11 @@ class FeedAPI {
   // POST /api/feed
   async create(body: CreateFeedRequest): Promise<ApiResponse<{ insertedId: number }>> {
     return this.http.post<{ insertedId: number }>("/api/feed", body);
+  }
+
+  // POST /api/feed/translate
+  async translate(body: TranslateFeedRequest): Promise<ApiResponse<TranslateFeedResponse>> {
+    return this.http.post<TranslateFeedResponse>("/api/feed/translate", body);
   }
 
   // POST /api/feed/:id

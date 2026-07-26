@@ -882,5 +882,9 @@
   "minecraft_block_grass": "草方块",
   "minecraft_block_dirt": "泥土",
   "minecraft_block_wood": "原木",
-  "minecraft_block_glass": "玻璃"
+  "minecraft_block_glass": "玻璃",
+  "ai_translate": {
+    "button": "AI 翻译",
+    "tooltip": "使用 AI 自动翻译为简体中文"
+  }
 }

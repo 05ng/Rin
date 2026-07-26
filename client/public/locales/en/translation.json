@@ -881,5 +881,9 @@
   "minecraft_block_grass": "Grass",
   "minecraft_block_dirt": "Dirt",
   "minecraft_block_wood": "Wood",
-  "minecraft_block_glass": "Glass"
+  "minecraft_block_glass": "Glass",
+  "ai_translate": {
+    "button": "AI Translate",
+    "tooltip": "Automatically translate to Simplified Chinese using AI"
+  }
 }

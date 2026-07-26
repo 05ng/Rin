@@ -78,6 +78,8 @@ queue = "${env.TASK_QUEUE_NAME || env.AI_SUMMARY_QUEUE_NAME || `${env.WORKER_NAM
 queue = "${env.TASK_QUEUE_NAME || env.AI_SUMMARY_QUEUE_NAME || `${env.WORKER_NAME || "rin-server"}-tasks`}"
 max_batch_size = 1
 max_batch_timeout = 5
+[ai]
+binding = "AI"
 ${env.R2_BUCKET_NAME
   ? `
 

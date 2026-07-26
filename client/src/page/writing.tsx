@@ -143,11 +143,53 @@ export function WritingPage({ id }: { id?: number }) {
   const [listed, setListed] = useState(true);
   const [content, setContent] = cache.useCache("content", "");
   const [createdAt, setCreatedAt] = useState<Date | undefined>(new Date());
-  const [language, setLanguage] = useState<ArticleLanguage>("en");
-  const [translationOf, setTranslationOf] = useState<number | null | undefined>(undefined);
+  const searchParams = new URLSearchParams(window.location.search);
+  const [language, setLanguage] = useState<ArticleLanguage>((searchParams.get('language') as ArticleLanguage) || "en");
+  const [translationOf, setTranslationOf] = useState<number | null | undefined>(
+    searchParams.get('translationOf') ? Number(searchParams.get('translationOf')) : undefined
+  );
   const [translationCandidates, setTranslationCandidates] = useState<TranslationCandidate[]>([]);
   const [publishing, setPublishing] = useState(false)
+  const [translating, setTranslating] = useState(false)
   const { showAlert, AlertUI } = useAlert()
+  
+  async function translateButton() {
+    if (translating || publishing) return;
+    if (!title || !content) {
+      showAlert(t("title_empty"));
+      return;
+    }
+    setTranslating(true);
+    const { data, error } = await client.feed.translate({
+      title,
+      summary,
+      content
+    });
+    setTranslating(false);
+
+    if (error) {
+      showAlert(error.value as string);
+      return;
+    }
+
+    if (data) {
+      if (id !== undefined) {
+        // If we're editing an existing article, redirect to a new draft with translated content
+        const newCache = Cache.with();
+        newCache.set("title", data.title);
+        newCache.set("summary", data.summary);
+        newCache.set("content", data.content);
+        window.location.href = `/admin/writing?language=zh-CN&translationOf=${id}`;
+      } else {
+        // Just update in place if it's already a new draft
+        setTitle(data.title);
+        setSummary(data.summary);
+        setContent(data.content);
+        setLanguage("zh-CN");
+      }
+    }
+  }
+
   function publishButton() {
     if (publishing) return;
     const tagsplit =
@@ -263,10 +305,24 @@ export function WritingPage({ id }: { id?: number }) {
       <button
         onClick={publishButton}
         className={`inline-flex items-center justify-center gap-2 rounded-xl bg-theme px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-theme-hover active:bg-theme-active disabled:cursor-not-allowed disabled:opacity-60 ${className ?? ""}`}
-        disabled={publishing}
+        disabled={publishing || translating}
       >
         {publishing && <Loading type="spin" height={16} width={16} />}
         <span>{t('publish.title')}</span>
+      </button>
+    );
+  }
+
+  function TranslateButton({ className }: { className?: string }) {
+    return (
+      <button
+        onClick={translateButton}
+        className={`inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-amber-600 active:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60 ${className ?? ""}`}
+        disabled={publishing || translating}
+        title={t('ai_translate.tooltip')}
+      >
+        {translating && <Loading type="spin" height={16} width={16} />}
+        <span>{t('ai_translate.button')}</span>
       </button>
     );
   }
@@ -281,7 +337,10 @@ export function WritingPage({ id }: { id?: number }) {
                 {id !== undefined ? t("update.title") : t("publish.title")}
               </p>
             </div>
-            <PublishButton className="w-auto" />
+            <div className="flex gap-2">
+              {language === 'en' && <TranslateButton className="w-auto" />}
+              <PublishButton className="w-auto" />
+            </div>
           </div>
 
           <div className="mt-5 grid gap-4 lg:grid-cols-2">

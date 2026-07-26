@@ -8,6 +8,7 @@ declare global {
     RIN_GOOGLE_CLIENT_SECRET?: string;
     TASK_QUEUE?: Queue<QueueTask>;
     R2_BUCKET?: R2Bucket;
+    AI?: any;
   }
 }
 
