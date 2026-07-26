@@ -3,3 +3,4 @@
 
 export const endpoint = ''
 export const oauth_url = endpoint + '/api/user/github'
+export const google_oauth_url = endpoint + '/api/user/google'

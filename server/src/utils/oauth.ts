@@ -38,10 +38,32 @@ export class GitHubProvider implements OAuthProvider {
     }
 }
 
+export interface GoogleConfig {
+    clientId: string;
+    clientSecret: string;
+    redirectUri?: string;
+}
+
+export class GoogleProvider implements OAuthProvider {
+    name = "Google";
+    clientId: string;
+    clientSecret: string;
+    redirectUri?: string;
+    authorizeUrl = "https://accounts.google.com/o/oauth2/v2/auth";
+    tokenUrl = "https://oauth2.googleapis.com/token";
+    scopes: string[] = ["openid", "email", "profile"];
+
+    constructor(config: GoogleConfig) {
+        this.clientId = config.clientId;
+        this.clientSecret = config.clientSecret;
+        this.redirectUri = config.redirectUri;
+    }
+}
+
 export interface OAuth2Utils {
     generateState: () => string;
     createRedirectUrl: (state: string, providerName: string) => string;
-    authorize: (providerName: string, code?: string) => Promise<OAuthToken>;
+    authorize: (providerName: string, code?: string, redirectUri?: string) => Promise<OAuthToken>;
 }
 
 export function createOAuthPlugin(providers: Record<string, OAuthProvider>): OAuth2Utils {
@@ -61,12 +83,21 @@ export function createOAuthPlugin(providers: Record<string, OAuthProvider>): OAu
             const params = new URLSearchParams({
                 client_id: provider.clientId,
                 state: state,
+                response_type: "code",
             });
+
+            if (provider.scopes && provider.scopes.length > 0) {
+                params.set("scope", provider.scopes.join(" "));
+            }
+
+            if (provider.redirectUri) {
+                params.set("redirect_uri", provider.redirectUri);
+            }
 
             return `${provider.authorizeUrl}?${params.toString()}`;
         },
 
-        authorize: async (providerName: string, code?: string): Promise<OAuthToken> => {
+        authorize: async (providerName: string, code?: string, redirectUri?: string): Promise<OAuthToken> => {
             const provider = providers[providerName];
             if (!provider) {
                 throw new Error(`OAuth provider "${providerName}" not found`);
@@ -80,10 +111,12 @@ export function createOAuthPlugin(providers: Record<string, OAuthProvider>): OAu
                 client_id: provider.clientId,
                 client_secret: provider.clientSecret,
                 code: code,
+                grant_type: "authorization_code",
             });
 
-            if (provider.redirectUri) {
-                params.set("redirect_uri", provider.redirectUri);
+            const finalRedirectUri = redirectUri || provider.redirectUri;
+            if (finalRedirectUri) {
+                params.set("redirect_uri", finalRedirectUri);
             }
 
             const response = await fetch(provider.tokenUrl, {

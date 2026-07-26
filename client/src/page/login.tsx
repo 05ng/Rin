@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import { ButtonWithLoading } from "../components/button";
 import { Icon } from "../components/icon";
 import { Input } from "../components/input";
-import { client, oauth_url } from "../app/runtime";
+import { client, oauth_url, google_oauth_url } from "../app/runtime";
 import { setAuthToken } from "../utils/auth";
 import { getLoginRedirectPath } from "../utils/auth-redirect";
 
@@ -15,8 +15,9 @@ export function LoginPage() {
   const [awaitingMfa, setAwaitingMfa] = useState(
     () => new URLSearchParams(window.location.search).get("mfa") === "1",
   );
-  const [authStatus, setAuthStatus] = useState<{ github: boolean; password: boolean }>({
+  const [authStatus, setAuthStatus] = useState<{ github: boolean; google: boolean; password: boolean }>({
     github: false,
+    google: false,
     password: false,
   });
   const [isLoading, setIsLoading] = useState(false);
@@ -160,24 +161,36 @@ export function LoginPage() {
               </>
             )}
 
-            {authStatus.github && (
+            {(authStatus.github || authStatus.google) && (
               <div className="flex flex-col items-center justify-center space-y-2 pt-2">
                 {authStatus.password && <p className="text-xs t-secondary">{t("login.or")}</p>}
                 {!authStatus.password && <p className="text-xs t-secondary">{t("login.oauth_only")}</p>}
                 <div className="flex flex-row items-center space-x-4">
-                  <Icon
-                    label={t("github_login")}
-                    name="ri-github-line"
-                    onClick={() => {
-                      window.location.href = oauth_url;
-                    }}
-                    hover
-                  />
+                  {authStatus.github && (
+                    <Icon
+                      label={t("github_login")}
+                      name="ri-github-line"
+                      onClick={() => {
+                        window.location.href = oauth_url;
+                      }}
+                      hover
+                    />
+                  )}
+                  {authStatus.google && (
+                    <Icon
+                      label={t("google_login", "Login with Google")} // Ensure fallback if i18n is missing
+                      name="ri-google-line"
+                      onClick={() => {
+                        window.location.href = google_oauth_url;
+                      }}
+                      hover
+                    />
+                  )}
                 </div>
               </div>
             )}
 
-            {!authStatus.github && !authStatus.password && (
+            {!authStatus.github && !authStatus.google && !authStatus.password && (
               <p className="text-sm text-red-500">{t("login.no_methods")}</p>
             )}
           </>

@@ -200,11 +200,12 @@ export function PasswordAuthService(): Hono<{
     return finishLogin(c, user);
   });
 
-  app.get("/status", (c: AppContext) => {
+  app.get("/status", async (c: AppContext) => {
     const env = c.env;
 
     return c.json({
       github: !!(env.RIN_GITHUB_CLIENT_ID && env.RIN_GITHUB_CLIENT_SECRET),
+      google: !!(env.RIN_GOOGLE_CLIENT_ID && env.RIN_GOOGLE_CLIENT_SECRET),
       mfa: isAdminMfaEnabled(env),
       password: !!(env.ADMIN_USERNAME && env.ADMIN_PASSWORD),
     });

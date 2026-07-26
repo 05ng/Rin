@@ -144,6 +144,44 @@ describe('UserService', () => {
         });
     });
 
+    describe('GET /google - Initiate Google OAuth', () => {
+        it('should redirect to Google OAuth', async () => {
+            const envWithGoogle = createMockEnv({
+                RIN_GOOGLE_CLIENT_ID: 'test-client-id',
+                RIN_GOOGLE_CLIENT_SECRET: 'test-client-secret',
+            });
+            const appWithGoogle = new Hono<{ Bindings: Env; Variables: Variables }>();
+            appWithGoogle.use(createMiddleware<{ Bindings: Env; Variables: Variables }>(async (c, next) => {
+                c.set('db', db);
+                c.set('cache', new TestCacheImpl());
+                c.set('serverConfig', new TestCacheImpl());
+                c.set('clientConfig', new TestCacheImpl());
+                c.set('jwt', {
+                    sign: async (payload: any) => `mock_token_${payload.id}`,
+                    verify: async (token: string) => null,
+                } as JWTUtils);
+                c.set('oauth2', {
+                    generateState: () => 'mock_state',
+                    createRedirectUrl: (state: string, provider: string) => `https://accounts.google.com/o/oauth2/v2/auth?state=${state}`,
+                    authorize: async (provider: string, code: string) => null,
+                });
+                c.set('env', envWithGoogle);
+                await next();
+            }));
+            appWithGoogle.route('/', UserService());
+            
+            const res = await appWithGoogle.request('/google', {
+                method: 'GET',
+                headers: { 'Referer': 'http://localhost:5173/' }
+            }, envWithGoogle);
+            
+            expect(res.status).toBe(302);
+            const location = res.headers.get('Location');
+            expect(location).toContain('google.com');
+            expect(location).toContain('state=');
+        });
+    });
+
     describe('GET /github/callback - GitHub OAuth callback', () => {
         it('should authenticate existing user', async () => {
             const originalFetch = global.fetch;

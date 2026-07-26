@@ -163,6 +163,147 @@ export function UserService(): Hono {
         return c.redirect(redirect_url.toString(), 302);
     });
 
+    // GET /user/google - Redirect to Google OAuth
+    app.get("/google", async (c: AppContext) => {
+        const oauth2 = c.get('oauth2');
+
+        if (!oauth2) {
+            throw new BadRequestError('Google OAuth is not configured');
+        }
+
+        const referer = c.req.header('referer');
+
+        if (!referer) {
+            throw new BadRequestError('Referer header is required');
+        }
+
+        // Build callback URL from referer
+        const refererUrl = new URL(referer);
+        const callbackUrl = new URL('/callback', refererUrl.origin);
+
+        setCookie(c, 'redirect_to', callbackUrl.toString(), {
+            path: '/',
+        });
+
+        const genState = await profileAsync(c, 'user_oauth_state', () => Promise.resolve(oauth2.generateState()));
+        setCookie(c, 'state', genState, {
+            path: '/',
+        });
+
+        // Add redirectUri to provider dynamically for callback validation
+        const redirectUri = new URL(c.req.url).origin + '/api/user/google/callback';
+        return c.redirect(oauth2.createRedirectUrl(genState, "Google") + `&redirect_uri=${encodeURIComponent(redirectUri)}`, 302);
+    });
+
+    // GET /user/google/callback - Google OAuth callback
+    app.get("/google/callback", async (c: AppContext) => {
+        const oauth2 = c.get('oauth2');
+        const jwt = c.get('jwt');
+        const db = c.get('db');
+
+        if (!oauth2) {
+            throw new BadRequestError('Google OAuth is not configured');
+        }
+
+        const query = c.req.query();
+        const stateCookie = getCookie(c, 'state');
+
+        // Verify state to prevent CSRF attacks
+        if (query.state !== stateCookie) {
+            throw new BadRequestError('Invalid state parameter');
+        }
+
+        // Clear state cookie
+        deleteCookie(c, 'state');
+
+        // Exchange code for access token
+        const redirectUri = new URL(c.req.url).origin + '/api/user/google/callback';
+        const google_token = await profileAsync(c, 'user_oauth_authorize', () => {
+            return oauth2.authorize("Google", query.code as string, redirectUri);
+        });
+        
+        if (!google_token) {
+            throw new BadRequestError('Failed to authorize with Google');
+        }
+
+        // Request Google userinfo
+        const response = await profileAsync(c, 'user_google_fetch', () => fetch("https://openidconnect.googleapis.com/v1/userinfo", {
+            headers: {
+                Authorization: `Bearer ${google_token.accessToken}`,
+                Accept: "application/json",
+            },
+        }));
+
+        const user: any = await profileAsync(c, 'user_google_parse', () => response.json());
+        const profile: {
+            openid: string;
+            username: string;
+            avatar: string;
+            permission: number | null;
+        } = {
+            openid: user.sub,
+            username: user.name,
+            avatar: user.picture,
+            permission: 0
+        };
+
+        let authToken: string | undefined;
+        const mfaEnabled = isAdminMfaEnabled(c.env);
+
+        // Check if user exists
+        const existingUser = await profileAsync(c, 'user_existing_lookup', () => db.query.users.findFirst({
+            where: eq(users.openid, profile.openid)
+        }));
+
+        if (existingUser) {
+            profile.permission = existingUser.permission;
+            await profileAsync(c, 'user_existing_update', () => db.update(users).set(profile).where(eq(users.id, existingUser.id)));
+
+            if (existingUser.permission === 1 && mfaEnabled) {
+                await profileAsync(c, 'user_existing_mfa_challenge', () => setMfaChallengeCookie(c, existingUser.id));
+                return redirectToMfaLogin(c);
+            }
+
+            authToken = await profileAsync(c, 'user_existing_token', () => createAccessToken(jwt, existingUser.id));
+            setJWTCookie(c, authToken);
+            setCookie(c, 'auth_token', authToken, {
+                expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
+                path: '/',
+                sameSite: 'Lax',
+            });
+        } else {
+            const anyUserCheck = await profileAsync(c, 'user_first_lookup', () => db.query.users.findMany({ limit: 1 }));
+            if (anyUserCheck.length === 0) {
+                profile.permission = 1;
+            }
+
+            const result = await profileAsync(c, 'user_insert', () => db.insert(users).values(profile).returning({ insertedId: users.id }));
+            if (!result || result.length === 0) {
+                throw new InternalServerError('Failed to register user');
+            }
+
+            if (profile.permission === 1 && mfaEnabled) {
+                await profileAsync(c, 'user_insert_mfa_challenge', () => setMfaChallengeCookie(c, result[0].insertedId));
+                return redirectToMfaLogin(c);
+            }
+
+            authToken = await profileAsync(c, 'user_insert_token', () => createAccessToken(jwt, result[0].insertedId));
+            setJWTCookie(c, authToken);
+            setCookie(c, 'auth_token', authToken, {
+                expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7),
+                path: '/',
+                sameSite: 'Lax',
+            });
+        }
+        
+        const redirectTo = getCookie(c, 'redirect_to');
+        const redirect_url = new URL(redirectTo || '/');
+        if (authToken) {
+            redirect_url.searchParams.set('token', authToken);
+        }
+        return c.redirect(redirect_url.toString(), 302);
+    });
+
     // GET /user/profile - Get user profile
     app.get('/profile', async (c: AppContext) => {
         const uid = c.get('uid');
