@@ -21,11 +21,23 @@ export function bootstrapApp() {
       backend: {
         loadPath: "/locales/{{lng}}/{{ns}}.json",
       },
-      fallbackLng: "en",
+      fallbackLng: {
+        'zh-TW': ['zh-CN', 'en'],
+        'zh-HK': ['zh-CN', 'en'],
+        'zh-MO': ['zh-CN', 'en'],
+        'zh': ['zh-CN', 'en'],
+        'default': ['en']
+      },
       supportedLngs: ["en", "zh-CN"],
       interpolation: {
         escapeValue: false,
       },
+      detection: {
+        order: ['querystring', 'localStorage', 'navigator'],
+        lookupQuerystring: 'lng',
+        lookupLocalStorage: 'i18nextLng',
+        caches: ['localStorage'],
+      }
     });
 
   bootstrapped = true;
