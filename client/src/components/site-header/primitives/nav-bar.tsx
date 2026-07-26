@@ -17,7 +17,7 @@ export function NavBar({
     <>
       <NavItem menu={menu} onClick={onClick} itemClassName={itemClassName} title={t("article.title")} selected={location === "/" || location.startsWith("/feed")} href="/" />
       <NavItem menu={menu} onClick={onClick} itemClassName={itemClassName} title={t("tools", { defaultValue: "Tools" })} selected={location === "/tools"} href="/tools" />
-      <NavItem menu={menu} onClick={onClick} itemClassName={itemClassName} title={t("game", { defaultValue: "Game" })} selected={location === "/game" || location.startsWith("/game/")} href="/game" />
+      <NavItem menu={menu} onClick={onClick} itemClassName={itemClassName} title={t("game", { defaultValue: "Fun" })} selected={location === "/game" || location.startsWith("/game/")} href="/game" />
       <NavItem menu={menu} onClick={onClick} itemClassName={itemClassName} title={t("friends.title")} selected={location === "/friends"} href="/friends" />
       <NavItem menu={menu} onClick={onClick} itemClassName={itemClassName} title={t("about.title")} selected={location === "/about"} href="/about" />
     </>
