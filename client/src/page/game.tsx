@@ -6,7 +6,7 @@ import { useSiteConfig } from '../hooks/useSiteConfig';
 
 type Point = { x: number; y: number };
 type Direction = 'up' | 'right' | 'down' | 'left';
-type PipeType = 'straight' | 'elbow';
+type PipeType = 'straight' | 'elbow' | 'tee';
 type Pipe = { id: number; type: PipeType; x: number; y: number; rotation: number };
 type Port = { id: number; direction: Direction; x: number; y: number };
 type Drag = { type: 'pipe'; pipeType: PipeType; id?: number; point: Point; rotation: number } | { type: 'pool'; point: Point };
@@ -26,7 +26,10 @@ const clampPool = (point: Point): Point => ({ x: Math.max(20, Math.min(WIDTH - P
 const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
 function getPorts(pipe: Pipe): Port[] {
-  const base: Direction[] = pipe.type === 'straight' ? ['left', 'right'] : ['up', 'right'];
+  let base: Direction[];
+  if (pipe.type === 'straight') base = ['left', 'right'];
+  else if (pipe.type === 'elbow') base = ['up', 'right'];
+  else base = ['left', 'right', 'down'];
   return base.map((direction) => {
     const actual = rotate(direction, pipe.rotation / 90);
     const vector = vectors[actual];
@@ -49,8 +52,8 @@ function getFlow(pipes: Pipe[]) {
       if (!reachable.has(other.id)) { reachable.add(other.id); queue.push(other.id); }
     }));
   }
-  const outlet = all.filter((port) => reachable.has(port.id) && !joined.has(`${port.id}:${port.direction}`) && port.y !== SOURCE.y).sort((a, b) => (a.direction === 'down' ? -1 : b.direction === 'down' ? 1 : 0))[0];
-  return { reachable, outlet };
+  const outlets = all.filter((port) => reachable.has(port.id) && !joined.has(`${port.id}:${port.direction}`) && port.y !== SOURCE.y);
+  return { reachable, outlets };
 }
 
 function stopsLeak(points: Point[]) {
@@ -65,13 +68,29 @@ function stopsLeak(points: Point[]) {
 }
 
 function FlowPath({ pipe }: { pipe: Pipe }) {
-  const path = pipe.type === 'straight' ? 'M -42 0 H 42' : 'M 0 -42 V 0 H 42';
-  return <path d={path} transform={`translate(${pipe.x} ${pipe.y}) rotate(${pipe.rotation})`} fill='none' stroke='#0ea5e9' strokeWidth='9' strokeLinecap='round' strokeLinejoin='round' strokeDasharray='3 16' className='waterfall-stream' pointerEvents='none' />;
+  const path = pipe.type === 'straight' ? 'M -42 0 H 42' : pipe.type === 'elbow' ? 'M 0 -42 V 0 H 42' : 'M -42 0 H 42 M 0 0 V 42';
+  return (
+    <g transform={`translate(${pipe.x} ${pipe.y}) rotate(${pipe.rotation})`} pointerEvents='none'>
+      <path d={path} fill='none' stroke='#bae6fd' strokeWidth='12' strokeLinecap='round' strokeLinejoin='round' style={{ filter: 'url(#liquid)' }} />
+      <path d={path} fill='none' stroke='#0284c7' strokeWidth='6' strokeLinecap='round' strokeLinejoin='round' strokeDasharray='4 16' className='waterfall-stream' />
+    </g>
+  );
 }
 function PipeView({ pipe, selected, onPointerDown }: { pipe: Pipe; selected: boolean; onPointerDown: (event: ReactPointerEvent<SVGGElement>) => void }) {
   return (<g transform={`translate(${pipe.x} ${pipe.y}) rotate(${pipe.rotation})`} onPointerDown={onPointerDown} cursor='grab'>
     {selected ? <circle r='42' fill='none' stroke='#fb466b' strokeDasharray='5 6' strokeWidth='2' /> : null}
-    {pipe.type === 'straight' ? <rect x='-50' y='-14' width='100' height='28' rx='14' fill='#e0f2fe' stroke='#38a7d9' strokeWidth='8' /> : <path d='M 0 -50 V 0 H 50' fill='none' stroke='#38a7d9' strokeWidth='30' strokeLinecap='round' strokeLinejoin='round' />}
+    {pipe.type === 'straight' ? <rect x='-50' y='-14' width='100' height='28' rx='14' fill='#e0f2fe' stroke='#38a7d9' strokeWidth='8' /> : 
+     pipe.type === 'elbow' ? (
+       <g>
+         <path d='M 0 -50 V 0 H 50' fill='none' stroke='#38a7d9' strokeWidth='30' strokeLinecap='round' strokeLinejoin='round' />
+         <path d='M 0 -46 V 0 H 46' fill='none' stroke='#e0f2fe' strokeWidth='14' strokeLinecap='round' strokeLinejoin='round' />
+       </g>
+     ) : (
+       <g>
+         <path d='M -50 0 H 50 M 0 0 V 50' fill='none' stroke='#38a7d9' strokeWidth='30' strokeLinecap='round' strokeLinejoin='round' />
+         <path d='M -46 0 H 46 M 0 0 V 46' fill='none' stroke='#e0f2fe' strokeWidth='14' strokeLinecap='round' strokeLinejoin='round' />
+       </g>
+     )}
   </g>);
 }
 
@@ -104,9 +123,36 @@ export function WaterFallGamePage() {
   const [won, setWon] = useState(false);
   const flow = useMemo(() => getFlow(pipes), [pipes]);
   const poolTarget = distance({ x: pool.x + POOL_SIZE.width / 2, y: pool.y + POOL_SIZE.height / 2 }, { x: TARGET.x + POOL_SIZE.width / 2, y: TARGET.y + POOL_SIZE.height / 2 }) < 55;
-  const outletInPool = Boolean(flow.outlet && flow.outlet.x >= pool.x && flow.outlet.x <= pool.x + POOL_SIZE.width && flow.outlet.y < pool.y + 20 && pool.y - flow.outlet.y < 320);
-  const ready = flow.reachable.size >= 2 && Boolean(flow.outlet) && poolTarget && outletInPool && stopsLeak(barrier);
+  const outletInPool = Boolean(flow.outlets && flow.outlets.some(outlet => outlet.x >= pool.x && outlet.x <= pool.x + POOL_SIZE.width && outlet.y < pool.y + 20 && pool.y - outlet.y < 320));
+  const ready = flow.reachable.size >= 2 && flow.outlets.length > 0 && poolTarget && outletInPool && stopsLeak(barrier);
   const toBoard = useCallback((clientX: number, clientY: number) => { const rect = boardRef.current?.getBoundingClientRect(); return rect ? { x: ((clientX - rect.left) / rect.width) * WIDTH, y: ((clientY - rect.top) / rect.height) * HEIGHT } : null; }, []);
+
+  const [fish, setFish] = useState({ x: POOL_SIZE.width / 2, y: POOL_SIZE.height / 2, vx: 2, vy: 1, rotation: 0 });
+
+  useEffect(() => {
+    let timer: number;
+    if (!won) {
+      timer = window.setInterval(() => {
+        setFish(f => {
+          let nx = f.x + f.vx;
+          let ny = f.y + f.vy;
+          let nvx = f.vx;
+          let nvy = f.vy;
+          const waterTop = POOL_SIZE.height - 10 - (POOL_SIZE.height - 10) * water / 100;
+          if (nx < 20 || nx > POOL_SIZE.width - 20) { nvx *= -1; nx += nvx; }
+          if (ny < waterTop + 15 || ny > POOL_SIZE.height - 15) { nvy *= -1; ny += nvy; }
+          if (Math.random() < 0.05) nvx += (Math.random() - 0.5);
+          if (Math.random() < 0.05) nvy += (Math.random() - 0.5);
+          nvx = Math.max(-3, Math.min(3, nvx));
+          nvy = Math.max(-3, Math.min(3, nvy));
+          if (Math.abs(nvx) < 1) nvx = nvx < 0 ? -1 : 1;
+          const rot = Math.atan2(nvy, nvx) * 180 / Math.PI;
+          return { x: nx, y: ny, vx: nvx, vy: nvy, rotation: rot };
+        });
+      }, 50);
+    }
+    return () => clearInterval(timer);
+  }, [water, won]);
 
   useEffect(() => {
     if (!drag) return undefined;
@@ -129,7 +175,7 @@ export function WaterFallGamePage() {
   const beginDraw = (event: ReactPointerEvent<SVGSVGElement>) => { if (!drawMode || drag) return; event.preventDefault(); const point = toBoard(event.clientX, event.clientY); if (point) { setBarrier([point]); setDrawing(true); } };
   const rotateSelected = () => { if (selected !== undefined) setPipes((current) => current.map((pipe) => pipe.id === selected ? { ...pipe, rotation: (pipe.rotation + 90) % 360 } : pipe)); };
   const reset = () => { setPipes([]); setPool(TARGET); setBarrier([]); setWater(0); setRunning(false); setWon(false); setSelected(undefined); nextId.current = 1; };
-  const tasks = [{ done: flow.reachable.size >= 2 && Boolean(flow.outlet), text: t("water_fall_task_connect") }, { done: stopsLeak(barrier), text: t("water_fall_task_line") }, { done: poolTarget && outletInPool, text: t("water_fall_task_pool") }];
+  const tasks = [{ done: flow.reachable.size >= 2 && flow.outlets.length > 0, text: t("water_fall_task_connect") }, { done: stopsLeak(barrier), text: t("water_fall_task_line") }, { done: poolTarget && outletInPool, text: t("water_fall_task_pool") }];
 
   return <main className='mx-auto flex w-full max-w-7xl flex-col gap-5 py-4'>
     <Helmet><title>{siteConfig.name} - {t("water_fall_title")}</title></Helmet>
@@ -137,14 +183,18 @@ export function WaterFallGamePage() {
     <div className='grid gap-5 xl:grid-cols-[minmax(0,1fr)_260px]'>
       <section className='overflow-hidden rounded-3xl border border-sky-200 bg-sky-50 shadow-sm dark:border-sky-900/60 dark:bg-slate-950'><div className='flex items-center justify-between border-b border-sky-200 px-4 py-3 dark:border-sky-900/60'><span className='text-sm font-semibold text-sky-900 dark:text-sky-100'>{t("water_fall_playground")}</span><span className='text-xs font-medium text-sky-700 dark:text-sky-300'>{t("water_fall_full", { count: Math.round(water) })}</span></div><div className='overflow-x-auto p-2 sm:p-4'>
         <svg ref={boardRef} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className='mx-auto block min-w-[760px] select-none rounded-2xl bg-gradient-to-b from-sky-100 to-white dark:from-slate-900 dark:to-slate-950' style={{ touchAction: 'none' }} onPointerDown={beginDraw}>
-          <defs><pattern id='game-grid' width='100' height='100' patternUnits='userSpaceOnUse'><path d='M 100 0 L 0 0 0 100' fill='none' stroke='#7dd3fc' strokeOpacity='0.16' /></pattern></defs><rect width={WIDTH} height={HEIGHT} fill='url(#game-grid)' />
+          <defs>
+            <pattern id='game-grid' width='100' height='100' patternUnits='userSpaceOnUse'><path d='M 100 0 L 0 0 0 100' fill='none' stroke='#7dd3fc' strokeOpacity='0.16' /></pattern>
+            <filter id="liquid"><feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" /><feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -9" result="liquid" /><feComposite in="SourceGraphic" in2="liquid" operator="atop" /></filter>
+          </defs>
+          <rect width={WIDTH} height={HEIGHT} fill='url(#game-grid)' />
           <rect x={TARGET.x} y={TARGET.y} width={POOL_SIZE.width} height={POOL_SIZE.height} rx='22' fill='#86efac' fillOpacity='0.12' stroke='#22c55e' strokeDasharray='8 8' strokeWidth='3' /><text x={TARGET.x} y={TARGET.y - 12} fill='#16a34a' fontSize='14' fontWeight='600'>{t("water_fall_pool_target")}</text>
-          <path d={`M ${SOURCE.x} 0 V ${SOURCE.y}`} stroke='#e0f2fe' strokeWidth='28' strokeLinecap='round' />{running ? <path d={`M ${SOURCE.x} 0 V ${SOURCE.y + 12}`} stroke='#0ea5e9' strokeWidth='13' strokeLinecap='round' strokeDasharray='3 18' className='waterfall-stream' /> : null}<circle cx={SOURCE.x} cy={SOURCE.y} r='10' fill='#38bdf8' /><path d={`M ${DANGER_X} 90 V ${stopsLeak(barrier) ? 230 : 350}`} stroke='#60a5fa' strokeWidth='10' strokeLinecap='round' strokeDasharray='2 22' />{stopsLeak(barrier) ? null : <text x={DANGER_X + 18} y='140' fill='#ef4444' fontSize='13' fontWeight='600'>{t("water_fall_draw_here")}</text>}
-          {flow.outlet ? <path d={`M ${flow.outlet.x} ${flow.outlet.y} V ${Math.max(flow.outlet.y + 30, pool.y)}`} stroke='#0ea5e9' strokeWidth='10' strokeLinecap='round' strokeDasharray='3 18' className={running && ready ? 'waterfall-stream' : undefined} /> : null}{pipes.map((pipe) => <PipeView key={pipe.id} pipe={pipe} selected={pipe.id === selected} onPointerDown={(event) => beginPipe(event, pipe.type, pipe.id)} />)}{pipes.filter((pipe) => running && flow.reachable.has(pipe.id)).map((pipe) => <FlowPath key={`flow-${pipe.id}`} pipe={pipe} />)}{drag?.type === 'pipe' && drag.id === undefined ? <PipeView pipe={{ id: -1, type: drag.pipeType, x: drag.point.x, y: drag.point.y, rotation: drag.rotation }} selected onPointerDown={() => undefined} /> : null}
-          <g transform={`translate(${pool.x} ${pool.y})`} onPointerDown={beginPool} cursor='grab'><rect width={POOL_SIZE.width} height={POOL_SIZE.height} rx='22' fill='#e0f2fe' stroke='#0284c7' strokeWidth='6' /><rect x='5' y={POOL_SIZE.height - 5 - (POOL_SIZE.height - 10) * water / 100} width={POOL_SIZE.width - 10} height={(POOL_SIZE.height - 10) * water / 100} rx='17' fill='#0284c7' /><text x={POOL_SIZE.width / 2} y={POOL_SIZE.height / 2 + 10} textAnchor='middle' fontSize='24' fontWeight='700' fill='#075985'>{t("water_fall_fish")}</text><text x={POOL_SIZE.width / 2} y={POOL_SIZE.height - 12} textAnchor='middle' fill='#075985' fontSize='12' fontWeight='700'>{won ? t('water_fall_fish_escaped') : t('water_fall_drag_pool')}</text></g>
-          {barrier.length > 1 ? <polyline points={barrier.map((point) => `${point.x},${point.y}`).join(' ')} fill='none' stroke='#f97316' strokeWidth='12' strokeLinecap='round' strokeLinejoin='round' /> : null}{won ? <text x={pool.x + POOL_SIZE.width / 2} y={pool.y - 20} textAnchor='middle' fontSize='20' fontWeight='700' className='waterfall-fish-escape'>{t("water_fall_fish_out")}</text> : null}
+          <path d={`M ${SOURCE.x} 0 V ${SOURCE.y}`} stroke='#e0f2fe' strokeWidth='28' strokeLinecap='round' />{running ? <path d={`M ${SOURCE.x} 0 V ${SOURCE.y + 12}`} stroke='#bae6fd' strokeWidth='12' strokeLinecap='round' style={{ filter: 'url(#liquid)' }} className='waterfall-stream' /> : null}{running ? <path d={`M ${SOURCE.x} 0 V ${SOURCE.y + 12}`} stroke='#0ea5e9' strokeWidth='6' strokeLinecap='round' strokeDasharray='3 18' className='waterfall-stream' /> : null}<circle cx={SOURCE.x} cy={SOURCE.y} r='10' fill='#38bdf8' /><path d={`M ${DANGER_X} 90 V ${stopsLeak(barrier) ? 230 : 350}`} stroke='#60a5fa' strokeWidth='10' strokeLinecap='round' strokeDasharray='2 22' />{stopsLeak(barrier) ? null : <text x={DANGER_X + 18} y='140' fill='#ef4444' fontSize='13' fontWeight='600'>{t("water_fall_draw_here")}</text>}
+          {flow.outlets.map((outlet, i) => <g key={`outlet-${i}`}><path d={`M ${outlet.x} ${outlet.y} V ${Math.max(outlet.y + 30, pool.y)}`} stroke='#bae6fd' strokeWidth='12' strokeLinecap='round' style={{ filter: 'url(#liquid)' }} className={running && ready ? 'waterfall-stream' : undefined} /><path d={`M ${outlet.x} ${outlet.y} V ${Math.max(outlet.y + 30, pool.y)}`} stroke='#0ea5e9' strokeWidth='6' strokeLinecap='round' strokeDasharray='3 18' className={running && ready ? 'waterfall-stream' : undefined} /></g>)}{pipes.map((pipe) => <PipeView key={pipe.id} pipe={pipe} selected={pipe.id === selected} onPointerDown={(event) => beginPipe(event, pipe.type, pipe.id)} />)}{pipes.filter((pipe) => running && flow.reachable.has(pipe.id)).map((pipe) => <FlowPath key={`flow-${pipe.id}`} pipe={pipe} />)}{drag?.type === 'pipe' && drag.id === undefined ? <PipeView pipe={{ id: -1, type: drag.pipeType, x: drag.point.x, y: drag.point.y, rotation: drag.rotation }} selected onPointerDown={() => undefined} /> : null}
+          <g transform={`translate(${pool.x} ${pool.y})`} onPointerDown={beginPool} cursor='grab'><rect width={POOL_SIZE.width} height={POOL_SIZE.height} rx='22' fill='#e0f2fe' stroke='#0284c7' strokeWidth='6' /><rect x='5' y={POOL_SIZE.height - 5 - (POOL_SIZE.height - 10) * water / 100} width={POOL_SIZE.width - 10} height={(POOL_SIZE.height - 10) * water / 100} rx='17' fill='#0284c7' /><g transform={`translate(${fish.x} ${fish.y}) rotate(${fish.rotation})`} className={won ? 'waterfall-fish-escape' : undefined}><text x={0} y={8} textAnchor='middle' fontSize='28' pointerEvents='none'>🐟</text></g><text x={POOL_SIZE.width / 2} y={POOL_SIZE.height - 12} textAnchor='middle' fill='#075985' fontSize='12' fontWeight='700'>{won ? t('water_fall_fish_escaped') : t('water_fall_drag_pool')}</text></g>
+          {barrier.length > 1 ? <polyline points={barrier.map((point) => `${point.x},${point.y}`).join(' ')} fill='none' stroke='#f97316' strokeWidth='12' strokeLinecap='round' strokeLinejoin='round' /> : null}
         </svg></div></section>
-      <aside className='flex flex-col gap-4'><section className='rounded-2xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-dark'><h2 className='font-semibold text-neutral-900 dark:text-white'>{t("water_fall_tools")}</h2><p className='mt-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400'>{t("water_fall_tools_description")}</p><div className='mt-4 grid grid-cols-2 gap-2'><button type='button' onPointerDown={(event) => beginPipe(event, 'straight')} className='rounded-xl border border-sky-200 bg-sky-50 px-2 py-3 text-xs font-medium dark:border-sky-900 dark:bg-sky-950/50'>{t("water_fall_straight")}</button><button type='button' onPointerDown={(event) => beginPipe(event, 'elbow')} className='rounded-xl border border-sky-200 bg-sky-50 px-2 py-3 text-xs font-medium dark:border-sky-900 dark:bg-sky-950/50'>{t("water_fall_elbow")}</button></div><button type='button' onClick={rotateSelected} disabled={selected === undefined} className='mt-2 w-full rounded-xl border border-black/10 px-3 py-2 text-sm disabled:opacity-40 dark:border-white/10'>{t("water_fall_rotate")}</button><button type='button' onClick={() => setDrawMode((value) => !value)} className={`mt-2 w-full rounded-xl px-3 py-2 text-sm font-semibold ${drawMode ? 'bg-orange-500 text-white' : 'border border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900 dark:bg-orange-950/40'}`}>{drawMode ? t('water_fall_drawing_on') : t('water_fall_draw_line')}</button><button type='button' onClick={() => setBarrier([])} className='mt-2 w-full text-xs text-neutral-500 hover:text-theme'>{t("water_fall_clear_line")}</button></section>
+      <aside className='flex flex-col gap-4'><section className='rounded-2xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-dark'><h2 className='font-semibold text-neutral-900 dark:text-white'>{t("water_fall_tools")}</h2><p className='mt-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400'>{t("water_fall_tools_description")}</p><div className='mt-4 grid grid-cols-3 gap-2'><button type='button' onPointerDown={(event) => beginPipe(event, 'straight')} className='rounded-xl border border-sky-200 bg-sky-50 px-1 py-3 text-xs font-medium dark:border-sky-900 dark:bg-sky-950/50'>{t("water_fall_straight")}</button><button type='button' onPointerDown={(event) => beginPipe(event, 'elbow')} className='rounded-xl border border-sky-200 bg-sky-50 px-1 py-3 text-xs font-medium dark:border-sky-900 dark:bg-sky-950/50'>{t("water_fall_elbow")}</button><button type='button' onPointerDown={(event) => beginPipe(event, 'tee')} className='rounded-xl border border-sky-200 bg-sky-50 px-1 py-3 text-xs font-medium dark:border-sky-900 dark:bg-sky-950/50'>{t("water_fall_tee")}</button></div><button type='button' onClick={rotateSelected} disabled={selected === undefined} className='mt-2 w-full rounded-xl border border-black/10 px-3 py-2 text-sm disabled:opacity-40 dark:border-white/10'>{t("water_fall_rotate")}</button><button type='button' onClick={() => setDrawMode((value) => !value)} className={`mt-2 w-full rounded-xl px-3 py-2 text-sm font-semibold ${drawMode ? 'bg-orange-500 text-white' : 'border border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900 dark:bg-orange-950/40'}`}>{drawMode ? t('water_fall_drawing_on') : t('water_fall_draw_line')}</button><button type='button' onClick={() => setBarrier([])} className='mt-2 w-full text-xs text-neutral-500 hover:text-theme'>{t("water_fall_clear_line")}</button></section>
       <section className='rounded-2xl border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-dark'><h2 className='font-semibold text-neutral-900 dark:text-white'>{t("water_fall_mission")}</h2><ul className='mt-3 space-y-3'>{tasks.map((task) => <li key={task.text} className='flex gap-2 text-sm'><span className={task.done ? 'text-emerald-500' : 'text-neutral-300'}>{task.done ? t('water_fall_done') : t('water_fall_todo')}</span><span>{task.text}</span></li>)}</ul><p className={`mt-4 rounded-xl px-3 py-2 text-xs leading-5 ${won ? 'bg-emerald-100 text-emerald-800' : ready ? 'bg-sky-100 text-sky-800' : 'bg-neutral-100 text-neutral-600'}`}>{won ? t('water_fall_won') : ready ? t('water_fall_ready') : t('water_fall_incomplete')}</p></section></aside>
     </div><style>{`@keyframes waterfall-fish-escape { from { transform: translate(0, 0); opacity: 1; } to { transform: translate(180px, -170px); opacity: 0; } } @keyframes waterfall-stream { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -76; } } .waterfall-fish-escape { animation: waterfall-fish-escape 2.8s ease-out forwards; } .waterfall-stream { animation: waterfall-stream 0.8s linear infinite; }`}</style>
   </main>;
