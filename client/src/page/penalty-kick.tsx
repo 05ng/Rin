@@ -41,9 +41,11 @@ export function PenaltyKickGamePage() {
       
       // Update Keeper
       const speed = difficultyRef.current === 'normal' ? 6 : difficultyRef.current === 'hard' ? 10 : 15;
-      g.keeper.x += g.keeper.dir * speed;
-      if (g.keeper.x > 620) { g.keeper.x = 620; g.keeper.dir = -1; }
-      if (g.keeper.x < 380) { g.keeper.x = 380; g.keeper.dir = 1; }
+      if (g.state === 'kicking') {
+        g.keeper.x += g.keeper.dir * speed;
+        if (g.keeper.x > 620) { g.keeper.x = 620; g.keeper.dir = -1; }
+        if (g.keeper.x < 380) { g.keeper.x = 380; g.keeper.dir = 1; }
+      }
 
       // Update Power
       if (g.state === 'charging') {
@@ -83,6 +85,7 @@ export function PenaltyKickGamePage() {
             if (currentG.state === 'scored' || currentG.state === 'missed') {
               currentG.state = 'idle';
               currentG.ball = { x: 500, y: 500, z: 0, vx: 0, vy: 0, vz: 0 };
+              currentG.keeper.x = 500; // Reset keeper to center
             }
           }, 1200);
         }
@@ -126,6 +129,9 @@ export function PenaltyKickGamePage() {
     const g = gameRef.current;
     if (g.state === 'charging') {
       g.state = 'kicking';
+      // Randomize keeper dive direction when kick starts (so it's not always diving the same way if it was standing still)
+      g.keeper.dir = Math.random() > 0.5 ? 1 : -1;
+      
       const dx = g.swipeCurrent.x - g.swipeStart.x;
       
       const p = Math.max(20, g.power);
