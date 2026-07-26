@@ -155,6 +155,7 @@ export interface UpdateProfileRequest {
 
 export interface AuthStatus {
   github: boolean;
+  google: boolean;
   mfa: boolean;
   password: boolean;
 }

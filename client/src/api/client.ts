@@ -84,12 +84,6 @@ export interface QueueStatusItem {
   createdAt: string;
 }
 
-export interface AuthStatus {
-  github: boolean;
-  google: boolean;
-  mfa: boolean;
-  password: boolean;
-}
 
 export interface QueueStatusResponse {
   queueConfigured: boolean;
