@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { FeedService } from '../feed';
+import { FeedService, SearchService } from '../feed';
 import { Hono } from "hono";
 import type { Variables } from "../../core/hono-types";
 import { setupTestApp, createTestUser, cleanupTestDB } from '../../../tests/fixtures';
@@ -24,6 +24,8 @@ describe('FeedService', () => {
         cache = ctx.cache;
         serverConfig = ctx.serverConfig;
         clientConfig = ctx.clientConfig;
+
+        app.route('/search', SearchService());
         
         // Create test user
         await createTestUser(sqlite);
@@ -712,7 +714,7 @@ describe('FeedService', () => {
                 })
             }, env);
 
-            const enRes = await app.request('/Searchable?language=en', { method: 'GET' }, env);
+            const enRes = await app.request('/search/Searchable?language=en', { method: 'GET' }, env);
             const enData = await enRes.json() as any;
             expect(enData.data.some((f: any) => f.title === 'Searchable EN')).toBe(true);
             expect(enData.data.some((f: any) => f.title === 'Searchable ZH')).toBe(false);
