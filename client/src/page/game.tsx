@@ -108,15 +108,15 @@ export function WaterFallGamePage() {
   const siteConfig = useSiteConfig();
   const { t } = useTranslation();
   const boardRef = useRef<SVGSVGElement>(null);
-  const nextId = useRef(1);
-  const [pipes, setPipes] = useState<Pipe[]>([]);
+  const nextId = useRef(2);
+  const [pipes, setPipes] = useState<Pipe[]>([{ id: 1, type: 'straight', x: 250, y: 300, rotation: 0 }]);
   const [pool, setPool] = useState<Point>(TARGET);
   const [barrier, setBarrier] = useState<Point[][]>([]);
+  const [drag, setDrag] = useState<DragState | null>(null);
+  const [selected, setSelected] = useState<number | undefined>();
   const [activeMode, setActiveMode] = useState<'draw' | 'eraser' | 'delete' | null>(null);
   const [drawing, setDrawing] = useState(false);
   const [erasing, setErasing] = useState(false);
-  const [selected, setSelected] = useState<number>();
-  const [drag, setDrag] = useState<Drag | null>(null);
   const [water, setWater] = useState(0);
   const [running, setRunning] = useState(false);
   const [won, setWon] = useState(false);
@@ -159,36 +159,15 @@ export function WaterFallGamePage() {
       timer = window.setInterval(() => {
         setFish(f => {
           let { x, y, targetRotation, rotation, speed } = f;
-          
-          if (Math.random() < 0.05) {
-            targetRotation += (Math.random() - 0.5) * 120;
-          }
-
-          let diff = targetRotation - rotation;
-          diff = ((diff + 540) % 360) - 180; 
-          rotation += diff * 0.15; 
-
+          if (Math.random() < 0.05) targetRotation += (Math.random() - 0.5) * 120;
+          let diff = targetRotation - rotation; diff = ((diff + 540) % 360) - 180; rotation += diff * 0.15; 
           const rad = rotation * Math.PI / 180;
-          const vx = Math.cos(rad) * speed;
-          const vy = Math.sin(rad) * speed;
-          
-          let nx = x + vx;
-          let ny = y + vy;
-          
+          const vx = Math.cos(rad) * speed; const vy = Math.sin(rad) * speed;
+          let nx = x + vx; let ny = y + vy;
           const waterTop = POOL_SIZE.height - 10 - (POOL_SIZE.height - 10) * water / 100;
-          
-          if (nx < 20 || nx > POOL_SIZE.width - 20) { 
-            nx = x;
-            targetRotation = 180 - targetRotation; 
-          }
-          if (ny < waterTop + 15 || ny > POOL_SIZE.height - 15) { 
-            ny = y;
-            targetRotation = -targetRotation; 
-          }
-          
-          targetRotation = targetRotation % 360;
-
-          return { x: nx, y: ny, targetRotation, rotation, speed };
+          if (nx < 20 || nx > POOL_SIZE.width - 20) { nx = x; targetRotation = 180 - targetRotation; }
+          if (ny < waterTop + 15 || ny > POOL_SIZE.height - 15) { ny = y; targetRotation = -targetRotation; }
+          return { x: nx, y: ny, targetRotation: targetRotation % 360, rotation, speed };
         });
       }, 50);
     }
@@ -197,37 +176,30 @@ export function WaterFallGamePage() {
 
   useEffect(() => {
     if (!drag) return undefined;
-    const move = (event: PointerEvent) => { const point = toBoard(event.clientX, event.clientY); if (!point) return; if (drag.type === 'pipe' && drag.id !== undefined) { setPipes((current) => current.map((pipe) => pipe.id === drag.id ? { ...pipe, x: point.x, y: point.y } : pipe)); setDrag((current) => current ? { ...current, point } : current); } else if (drag.type === 'pool') { const next = clampPool({ x: point.x - POOL_SIZE.width / 2, y: point.y - POOL_SIZE.height / 2 }); setPool(next); setDrag((current) => current ? { ...current, point: next } : current); } else setDrag((current) => current ? { ...current, point } : current); };
-    const up = () => { if (drag.type === 'pipe') { const point = snap(drag.point); if (drag.id === undefined) setPipes((current) => [...current, { id: nextId.current++, type: drag.pipeType, x: point.x, y: point.y, rotation: drag.rotation }]); else setPipes((current) => current.map((pipe) => pipe.id === drag.id ? { ...pipe, x: point.x, y: point.y } : pipe)); } setDrag(() => null); };
+    const move = (event: PointerEvent) => { const point = toBoard(event.clientX, event.clientY); if (!point) return; if (drag.type === 'pipe' && drag.id !== undefined) { setPipes((current) => current.map((pipe) => pipe.id === drag.id ? { ...pipe, x: point.x, y: point.y } : pipe)); setDrag({ ...drag, point }); } else if (drag.type === 'pool') { const next = clampPool({ x: point.x - POOL_SIZE.width / 2, y: point.y - POOL_SIZE.height / 2 }); setPool(next); setDrag({ ...drag, point: next }); } else setDrag({ ...drag, point }); };
+    const up = () => { if (drag.type === 'pipe') { const point = snap(drag.point); if (drag.id === undefined) setPipes((current) => [...current, { id: nextId.current++, type: drag.pipeType, x: point.x, y: point.y, rotation: drag.rotation }]); else setPipes((current) => current.map((pipe) => pipe.id === drag.id ? { ...pipe, x: point.x, y: point.y } : pipe)); } setDrag(null); };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up, { once: true });
     return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
   }, [drag, toBoard]);
+
   useEffect(() => {
     if (!drawing && !erasing) return undefined;
     const move = (event: PointerEvent) => { 
       const point = toBoard(event.clientX, event.clientY); 
       if (!point) return; 
-      if (drawing) {
-        setBarrier(current => {
-          const newBarrier = [...current];
-          if (newBarrier.length === 0) return newBarrier;
-          const lastStroke = [...newBarrier[newBarrier.length - 1], point].slice(-100);
-          newBarrier[newBarrier.length - 1] = lastStroke;
-          return newBarrier;
-        });
-      } else if (erasing) {
-        setBarrier(current => current.filter(stroke => !stroke.some(p => distance(p, point) < 20)));
-      }
+      if (drawing) setBarrier(current => { const newBarrier = [...current]; if (newBarrier.length === 0) return newBarrier; newBarrier[newBarrier.length - 1] = [...newBarrier[newBarrier.length - 1], point].slice(-100); return newBarrier; });
+      else if (erasing) setBarrier(current => current.filter(stroke => !stroke.some(p => distance(p, point) < 20)));
     };
     const up = () => { setDrawing(false); setErasing(false); }; 
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up, { once: true });
     return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
   }, [drawing, erasing, toBoard]);
+
   useEffect(() => { if (!running || won) return undefined; const timer = window.setInterval(() => setWater((level) => ready ? Math.min(100, level + 2) : Math.max(0, level - 0.5)), 100); return () => window.clearInterval(timer); }, [ready, running, won]);
   useEffect(() => { if (water >= 100) { setWon(true); setRunning(false); } }, [water]);
 
-  const beginPipe = (event: ReactPointerEvent<SVGGElement | HTMLButtonElement>, type: PipeType, id?: number) => { 
-    event.preventDefault(); event.stopPropagation(); 
+  const beginDrag = (event: ReactPointerEvent, type: PipeType, id?: number) => { 
+    event.preventDefault(); 
     if (activeMode === 'delete' && id !== undefined) {
       setPipes(current => current.filter(p => p.id !== id));
       if (selected === id) setSelected(undefined);
@@ -238,7 +210,7 @@ export function WaterFallGamePage() {
     const pipe = pipes.find((item) => item.id === id); 
     setDrag({ type: 'pipe', pipeType: type, id, point, rotation: pipe?.rotation ?? 0 }); 
   };
-  const beginPool = (event: ReactPointerEvent<SVGGElement>) => { event.preventDefault(); event.stopPropagation(); const point = toBoard(event.clientX, event.clientY); if (point) setDrag({ type: 'pool', point }); };
+  const beginPool = (event: ReactPointerEvent) => { event.preventDefault(); event.stopPropagation(); const point = toBoard(event.clientX, event.clientY); if (point) setDrag({ type: 'pool', point }); };
   const handleBoardPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => { 
     if (drag) return; 
     event.preventDefault(); 
@@ -251,6 +223,10 @@ export function WaterFallGamePage() {
     } else if (activeMode === 'eraser') {
       setErasing(true);
       setBarrier(current => current.filter(stroke => !stroke.some(p => distance(p, point) < 20)));
+    } else if (activeMode === 'delete') { 
+      // handled in item click
+    } else if (activeMode === null && event.target === boardRef.current) {
+      setSelected(undefined);
     }
   };
   const rotateSelected = (id?: number) => { const target = id !== undefined ? id : selected; if (target !== undefined) setPipes((current) => current.map((pipe) => pipe.id === target ? { ...pipe, rotation: (pipe.rotation + 90) % 360 } : pipe)); };
@@ -266,25 +242,37 @@ export function WaterFallGamePage() {
     </div>
     <div className='grid gap-4 md:grid-cols-[56px_minmax(0,1fr)_56px]'>
       <aside className='flex flex-row md:flex-col gap-2'>
-        <button type='button' title={t("water_fall_straight")} onPointerDown={(event) => beginPipe(event, 'straight')} className='flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-sky-200 bg-sky-50 hover:bg-sky-100 dark:border-sky-900 dark:bg-sky-950/50 dark:hover:bg-sky-900'><svg width="24" height="24" viewBox="-60 -60 120 120"><rect x='-50' y='-14' width='100' height='28' rx='14' fill='#e0f2fe' stroke='#38a7d9' strokeWidth='12' /></svg></button>
-        <button type='button' title={t("water_fall_elbow")} onPointerDown={(event) => beginPipe(event, 'elbow')} className='flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-sky-200 bg-sky-50 hover:bg-sky-100 dark:border-sky-900 dark:bg-sky-950/50 dark:hover:bg-sky-900'><svg width="24" height="24" viewBox="-60 -60 120 120"><path d='M 0 -50 V 0 H 50' fill='none' stroke='#38a7d9' strokeWidth='30' strokeLinecap='round' strokeLinejoin='round' /><path d='M 0 -46 V 0 H 46' fill='none' stroke='#e0f2fe' strokeWidth='14' strokeLinecap='round' strokeLinejoin='round' /></svg></button>
-        <button type='button' title={t("water_fall_tee")} onPointerDown={(event) => beginPipe(event, 'tee')} className='flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-sky-200 bg-sky-50 hover:bg-sky-100 dark:border-sky-900 dark:bg-sky-950/50 dark:hover:bg-sky-900'><svg width="24" height="24" viewBox="-60 -60 120 120"><path d='M -50 0 H 50 M 0 0 V 50' fill='none' stroke='#38a7d9' strokeWidth='30' strokeLinecap='round' strokeLinejoin='round' /><path d='M -46 0 H 46 M 0 0 V 46' fill='none' stroke='#e0f2fe' strokeWidth='14' strokeLinecap='round' strokeLinejoin='round' /></svg></button>
+        <div className='mb-2 hidden text-center text-xs font-bold text-neutral-400 md:block uppercase tracking-wider'>{t("water_fall_tools")}</div>
+        <button type='button' onPointerDown={(e) => beginDrag(e, 'straight')} style={{ touchAction: 'none' }} title={t("water_fall_straight")} className='flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-sky-200 bg-sky-50 text-sky-700 transition-colors hover:bg-sky-100 dark:border-sky-900 dark:bg-sky-950/40 dark:hover:bg-sky-900'><svg width='28' height='28' viewBox='0 0 100 100'><rect x='10' y='36' width='80' height='28' rx='14' fill='#e0f2fe' stroke='#38a7d9' strokeWidth='8' /></svg></button>
+        <button type='button' onPointerDown={(e) => beginDrag(e, 'elbow')} style={{ touchAction: 'none' }} title={t("water_fall_elbow")} className='flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-sky-200 bg-sky-50 text-sky-700 transition-colors hover:bg-sky-100 dark:border-sky-900 dark:bg-sky-950/40 dark:hover:bg-sky-900'><svg width='28' height='28' viewBox='0 0 100 100'><path d='M 10 50 Q 50 50 50 90' fill='none' stroke='#38a7d9' strokeWidth='28' strokeLinecap='round' /><path d='M 10 50 Q 50 50 50 90' fill='none' stroke='#e0f2fe' strokeWidth='12' strokeLinecap='round' /></svg></button>
+        <button type='button' onPointerDown={(e) => beginDrag(e, 'tee')} style={{ touchAction: 'none' }} title={t("water_fall_tee")} className='flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-sky-200 bg-sky-50 text-sky-700 transition-colors hover:bg-sky-100 dark:border-sky-900 dark:bg-sky-950/40 dark:hover:bg-sky-900'><svg width='28' height='28' viewBox='0 0 100 100'><path d='M 10 50 L 90 50 M 50 50 L 50 90' fill='none' stroke='#38a7d9' strokeWidth='28' strokeLinecap='round' /><path d='M 10 50 L 90 50 M 50 50 L 50 90' fill='none' stroke='#e0f2fe' strokeWidth='12' strokeLinecap='round' /></svg></button>
+        <button type='button' onPointerDown={(e) => beginDrag(e, 'cross')} style={{ touchAction: 'none' }} title={t("water_fall_cross")} className='flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-sky-200 bg-sky-50 text-sky-700 transition-colors hover:bg-sky-100 dark:border-sky-900 dark:bg-sky-950/40 dark:hover:bg-sky-900'><svg width='28' height='28' viewBox='0 0 100 100'><path d='M 10 50 L 90 50 M 50 10 L 50 90' fill='none' stroke='#38a7d9' strokeWidth='28' strokeLinecap='round' /><path d='M 10 50 L 90 50 M 50 10 L 50 90' fill='none' stroke='#e0f2fe' strokeWidth='12' strokeLinecap='round' /></svg></button>
         <div className='my-1 hidden h-px w-full bg-black/10 dark:bg-white/10 md:block' />
         <button type='button' title={t("water_fall_draw_line")} onClick={() => { setActiveMode(activeMode === 'draw' ? null : 'draw'); setSelected(undefined); setDrag(null); }} className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border transition-colors ${activeMode === 'draw' ? 'border-orange-500 bg-orange-500 text-white shadow-sm' : 'border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-900 dark:bg-orange-950/40 dark:hover:bg-orange-900'}`}><i className="ri-brush-line text-xl"></i></button>
       </aside>
-      <section className='overflow-hidden rounded-3xl border border-sky-200 bg-sky-50 shadow-sm dark:border-sky-900/60 dark:bg-slate-950'><div className='flex items-center justify-between border-b border-sky-200 px-4 py-3 dark:border-sky-900/60'><span className='text-sm font-semibold text-sky-900 dark:text-sky-100'>{t("water_fall_playground")}</span><span className='text-xs font-medium text-sky-700 dark:text-sky-300'>{t("water_fall_full", { count: Math.round(water) })}</span></div><div className='overflow-x-auto p-2 sm:p-4'>
-        <svg ref={boardRef} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className='mx-auto block w-full min-w-[300px] select-none rounded-2xl bg-gradient-to-b from-sky-100 to-white dark:from-slate-900 dark:to-slate-950' style={{ touchAction: activeMode !== null ? 'none' : 'auto' }} onPointerDown={handleBoardPointerDown}>
-          <defs>
-            <pattern id='game-grid' width='100' height='100' patternUnits='userSpaceOnUse'><path d='M 100 0 L 0 0 0 100' fill='none' stroke='#7dd3fc' strokeOpacity='0.16' /></pattern>
-            <filter id="liquid"><feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" /><feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -9" result="liquid" /><feComposite in="SourceGraphic" in2="liquid" operator="atop" /></filter>
-          </defs>
-          <rect width={WIDTH} height={HEIGHT} fill='url(#game-grid)' />
-          
-          <path d={`M ${SOURCE.x} 0 V ${SOURCE.y}`} stroke='#e0f2fe' strokeWidth='28' strokeLinecap='round' />{running ? <path d={`M ${SOURCE.x} 0 V ${SOURCE.y + 12}`} stroke='#bae6fd' strokeWidth='12' strokeLinecap='round' style={{ filter: 'url(#liquid)' }} className='waterfall-stream' /> : null}{running ? <path d={`M ${SOURCE.x} 0 V ${SOURCE.y + 12}`} stroke='#0ea5e9' strokeWidth='6' strokeLinecap='round' strokeDasharray='3 18' className='waterfall-stream' /> : null}<circle cx={SOURCE.x} cy={SOURCE.y} r='10' fill='#38bdf8' />
-          {drops.map((drop, i) => <g key={`outlet-${i}`}><path d={`M ${drop.x} ${drop.startY} V ${drop.endY}`} stroke='#bae6fd' strokeWidth='12' strokeLinecap='round' style={{ filter: 'url(#liquid)' }} className={running && ready ? 'waterfall-stream' : undefined} /><path d={`M ${drop.x} ${drop.startY} V ${drop.endY}`} stroke='#0ea5e9' strokeWidth='6' strokeLinecap='round' strokeDasharray='3 18' className={running && ready ? 'waterfall-stream' : undefined} /></g>)}{pipes.map((pipe) => <PipeView key={pipe.id} pipe={pipe} selected={pipe.id === selected} onPointerDown={(event) => beginPipe(event, pipe.type, pipe.id)} onDoubleClick={() => rotateSelected(pipe.id)} />)}{pipes.filter((pipe) => running && flow.reachable.has(pipe.id)).map((pipe) => <FlowPath key={`flow-${pipe.id}`} pipe={pipe} />)}{drag?.type === 'pipe' && drag.id === undefined ? <PipeView pipe={{ id: -1, type: drag.pipeType, x: drag.point.x, y: drag.point.y, rotation: drag.rotation }} selected onPointerDown={() => undefined} /> : null}
-          <g transform={`translate(${pool.x} ${pool.y})`} onPointerDown={beginPool} cursor='grab' style={{ touchAction: 'none' }}><rect width={POOL_SIZE.width} height={POOL_SIZE.height} rx='22' fill='#e0f2fe' stroke='#0284c7' strokeWidth='6' /><rect x='5' y={POOL_SIZE.height - 5 - (POOL_SIZE.height - 10) * water / 100} width={POOL_SIZE.width - 10} height={(POOL_SIZE.height - 10) * water / 100} rx='17' fill='#0284c7' /><g transform={`translate(${fish.x} ${fish.y}) rotate(${fish.rotation})`} className={won ? 'waterfall-fish-escape' : undefined}><text x={0} y={8} textAnchor='middle' fontSize='28' pointerEvents='none'>🐟</text></g><text x={POOL_SIZE.width / 2} y={POOL_SIZE.height - 12} textAnchor='middle' fill='#075985' fontSize='12' fontWeight='700'>{won ? t('water_fall_fish_escaped') : t('water_fall_drag_pool')}</text></g>
-          {barrier.map((stroke, index) => stroke.length > 1 ? <polyline key={index} points={stroke.map((point) => `${point.x},${point.y}`).join(' ')} fill='none' stroke='#f97316' strokeWidth='12' strokeLinecap='round' strokeLinejoin='round' /> : null)}
-        </svg></div></section>
+      <section className='overflow-hidden rounded-3xl border border-sky-200 bg-sky-50 shadow-sm dark:border-sky-900/60 dark:bg-slate-950'>
+        <div className='flex items-center justify-between border-b border-sky-200 px-4 py-3 dark:border-sky-900/60'>
+          <span className='text-sm font-semibold text-sky-900 dark:text-sky-100'>{t("water_fall_playground")}</span>
+          <span className='text-xs font-medium text-sky-700 dark:text-sky-300'>{t("water_fall_full", { count: Math.round(water) })}</span>
+        </div>
+        <div className='flex p-2 sm:p-4'>
+          <svg ref={boardRef} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className='mx-auto block w-full min-w-[300px] select-none rounded-2xl bg-gradient-to-b from-sky-100 to-white dark:from-slate-900 dark:to-slate-950' style={{ touchAction: 'none' }} onPointerDown={handleBoardPointerDown}>
+            <defs>
+              <pattern id='game-grid' width='100' height='100' patternUnits='userSpaceOnUse'><path d='M 100 0 L 0 0 0 100' fill='none' stroke='#7dd3fc' strokeOpacity='0.16' /></pattern>
+              <filter id="liquid"><feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" /><feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -9" result="liquid" /><feComposite in="SourceGraphic" in2="liquid" operator="atop" /></filter>
+            </defs>
+            <rect width={WIDTH} height={HEIGHT} fill='url(#game-grid)' />
+            
+            <path d={`M ${SOURCE.x} 0 V ${SOURCE.y}`} stroke='#e0f2fe' strokeWidth='28' strokeLinecap='round' />{running ? <path d={`M ${SOURCE.x} 0 V ${SOURCE.y + 12}`} stroke='#bae6fd' strokeWidth='12' strokeLinecap='round' style={{ filter: 'url(#liquid)' }} className='waterfall-stream' /> : null}{running ? <path d={`M ${SOURCE.x} 0 V ${SOURCE.y + 12}`} stroke='#0ea5e9' strokeWidth='6' strokeLinecap='round' strokeDasharray='3 18' className='waterfall-stream' /> : null}<circle cx={SOURCE.x} cy={SOURCE.y} r='10' fill='#38bdf8' />
+            {drops.map((drop, i) => <g key={`outlet-${i}`}><path d={`M ${drop.x} ${drop.startY} V ${drop.endY}`} stroke='#bae6fd' strokeWidth='12' strokeLinecap='round' style={{ filter: 'url(#liquid)' }} className={running && ready ? 'waterfall-stream' : undefined} /><path d={`M ${drop.x} ${drop.startY} V ${drop.endY}`} stroke='#0ea5e9' strokeWidth='6' strokeLinecap='round' strokeDasharray='3 18' className={running && ready ? 'waterfall-stream' : undefined} /></g>)}{pipes.map((pipe) => <PipeView key={pipe.id} pipe={pipe} selected={pipe.id === selected} onPointerDown={(event) => beginDrag(event, pipe.type, pipe.id)} onDoubleClick={() => rotateSelected(pipe.id)} />)}{pipes.filter((pipe) => running && flow.reachable.has(pipe.id)).map((pipe) => <FlowPath key={`flow-${pipe.id}`} pipe={pipe} />)}{drag?.type === 'pipe' && drag.id === undefined ? <PipeView pipe={{ id: -1, type: drag.pipeType, x: drag.point.x, y: drag.point.y, rotation: drag.rotation }} selected onPointerDown={() => undefined} /> : null}
+            <g transform={`translate(${pool.x} ${pool.y})`} onPointerDown={beginPool} cursor='grab' style={{ touchAction: 'none' }}><rect width={POOL_SIZE.width} height={POOL_SIZE.height} rx='22' fill='#e0f2fe' stroke='#0284c7' strokeWidth='6' /><rect x='5' y={POOL_SIZE.height - 5 - (POOL_SIZE.height - 10) * water / 100} width={POOL_SIZE.width - 10} height={(POOL_SIZE.height - 10) * water / 100} rx='17' fill='#0284c7' /><g transform={`translate(${fish.x} ${fish.y}) rotate(${fish.rotation})`} className={won ? 'waterfall-fish-escape' : undefined}><text x={0} y={8} textAnchor='middle' fontSize='28' pointerEvents='none'>🐟</text></g><text x={POOL_SIZE.width / 2} y={POOL_SIZE.height - 12} textAnchor='middle' fill='#075985' fontSize='12' fontWeight='700'>{won ? t('water_fall_fish_escaped') : t('water_fall_drag_pool')}</text></g>
+            {barrier.map((stroke, index) => stroke.length > 1 ? <polyline key={index} points={stroke.map((point) => `${point.x},${point.y}`).join(' ')} fill='none' stroke='#f97316' strokeWidth='12' strokeLinecap='round' strokeLinejoin='round' /> : null)}
+          </svg>
+          <div className='ml-2 flex w-8 flex-col items-center justify-center rounded-2xl bg-sky-200/50 dark:bg-sky-900/30 text-sky-500/50 dark:text-sky-400/50' style={{ touchAction: 'pan-y' }}>
+            <i className="ri-expand-up-down-line text-xl"></i>
+          </div>
+        </div>
+      </section>
       <aside className='flex flex-row md:flex-col gap-2'>
         <button type='button' title={t("water_fall_rotate")} onClick={() => rotateSelected()} disabled={selected === undefined} className='flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-black/10 bg-white text-neutral-700 hover:bg-neutral-50 disabled:opacity-40 dark:border-white/10 dark:bg-dark dark:text-neutral-300'><i className="ri-refresh-line text-xl"></i></button>
         <button type='button' title={t("water_fall_eraser")} onClick={() => { setActiveMode(activeMode === 'eraser' ? null : 'eraser'); setSelected(undefined); setDrag(null); }} className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border transition-colors ${activeMode === 'eraser' ? 'border-pink-500 bg-pink-500 text-white shadow-sm' : 'border-pink-200 bg-pink-50 text-pink-700 hover:bg-pink-100 dark:border-pink-900 dark:bg-pink-950/40 dark:hover:bg-pink-900'}`}><i className="ri-eraser-line text-xl"></i></button>
