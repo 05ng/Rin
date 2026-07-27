@@ -630,6 +630,7 @@ export function FeedService(): Hono<{
 
         const contentChanged = content && content !== feed.content;
         const isDraft = draft !== undefined ? draft : (feed.draft === 1);
+        const isListed = listed !== undefined ? listed : (feed.listed === 1);
         const shouldQueueAISummary = (contentChanged && !isDraft) || (!isDraft && feed.draft === 1 && !feed.ai_summary);
         const updateTime = new Date();
 
@@ -644,8 +645,8 @@ export function FeedService(): Hono<{
             language,
             translationGroup,
             top,
-            listed: listed ? 1 : 0,
-            draft: draft === undefined ? undefined : draft ? 1 : 0,
+            listed: isListed ? 1 : 0,
+            draft: isDraft ? 1 : 0,
             createdAt: createdAt ? new Date(createdAt) : undefined,
             updatedAt: updateTime
         }).where(eq(feeds.id, id_num)));
@@ -667,7 +668,7 @@ export function FeedService(): Hono<{
             await cache.deletePrefix('feed_');
         });
 
-        if (env.SEO_WORKFLOW && (listed || feed.listed) && (!draft || feed.draft === 0)) {
+        if (env.SEO_WORKFLOW && isListed && !isDraft) {
             const baseUrl = new URL(c.req.url).origin;
             const urlPath = alias ? `/${alias}` : (feed.alias ? `/${feed.alias}` : `/feed/${id_num}`);
             env.SEO_WORKFLOW.create({ params: { feedId: id_num, urlPath, baseUrl } }).catch(console.error);
