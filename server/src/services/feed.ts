@@ -1,4 +1,5 @@
 import { and, asc, count, desc, eq, gt, inArray, like, lt, ne, or } from "drizzle-orm";
+import { SEARCH_VECTOR_SCORE_THRESHOLD_KEY, SERVER_CONFIG_DEFAULTS } from "@rin/config";
 import type { SQL } from "drizzle-orm";
 import { Hono } from "hono";
 import type { DB, Variables } from "../core/hono-types";
@@ -41,6 +42,27 @@ function parseArticleLanguage(value: unknown): ArticleLanguage | null {
     return typeof value === "string" && ARTICLE_LANGUAGES.includes(value as ArticleLanguage)
         ? value as ArticleLanguage
         : null;
+}
+
+const DEFAULT_VECTOR_SCORE_THRESHOLD = Number(SERVER_CONFIG_DEFAULTS.get(SEARCH_VECTOR_SCORE_THRESHOLD_KEY) ?? 0.72);
+
+function parseVectorScoreThreshold(value: unknown) {
+    const parsed = typeof value === "number"
+        ? value
+        : typeof value === "string" && value.trim().length > 0
+            ? Number(value.trim())
+            : DEFAULT_VECTOR_SCORE_THRESHOLD;
+
+    if (!Number.isFinite(parsed)) {
+        return DEFAULT_VECTOR_SCORE_THRESHOLD;
+    }
+
+    return Math.min(1, Math.max(-1, parsed));
+}
+
+async function getVectorScoreThreshold(serverConfig: { getOrDefault<T>(key: string, defaultValue: T): Promise<T> }) {
+    const value = await serverConfig.getOrDefault<unknown>(SEARCH_VECTOR_SCORE_THRESHOLD_KEY, DEFAULT_VECTOR_SCORE_THRESHOLD);
+    return parseVectorScoreThreshold(value);
 }
 
 function articlePath(id: number, alias: string | null, language: ArticleLanguage | string) {
@@ -799,7 +821,7 @@ export function FeedService(): Hono<{
     return app;
 }
 
-async function findSemanticFeedIds(env: Env, keyword: string, language: ArticleLanguage | null, topK: number) {
+async function findSemanticFeedIds(env: Env, keyword: string, language: ArticleLanguage | null, topK: number, minScore: number) {
     if (!env.AI || !env.ARTICLE_VECTORIZE) {
         return [] as number[];
     }
@@ -819,6 +841,10 @@ async function findSemanticFeedIds(env: Env, keyword: string, language: ArticleL
 
         const ids = new Set<number>();
         for (const match of result?.matches || []) {
+            if (typeof match.score !== "number" || match.score < minScore) {
+                continue;
+            }
+
             const metadataFeedId = match.metadata?.feedId;
             const parsedId = typeof metadataFeedId === "number"
                 ? metadataFeedId
@@ -909,6 +935,7 @@ export function SearchService(): Hono<{
         const cache = c.get('cache');
         const admin = c.get('admin');
         const env = c.get('env');
+        const serverConfig = c.get('serverConfig');
         const page = c.req.query('page');
         const limit = c.req.query('limit');
         let keyword = c.req.param('keyword');
@@ -925,7 +952,8 @@ export function SearchService(): Hono<{
         const language = languageQuery === undefined ? null : parseArticleLanguage(languageQuery);
 
         const vectorTopK = Math.max(20, Math.min(50, (page_num + 1) * limit_num + 10));
-        const semanticFeedIds = await profileAsync(c, 'feed_search_vector', () => findSemanticFeedIds(env, keyword, language, vectorTopK));
+        const vectorScoreThreshold = await profileAsync(c, 'feed_search_vector_score_threshold', () => getVectorScoreThreshold(serverConfig));
+        const semanticFeedIds = await profileAsync(c, 'feed_search_vector', () => findSemanticFeedIds(env, keyword, language, vectorTopK, vectorScoreThreshold));
         const semanticFeeds = await profileAsync(c, 'feed_search_vector_db', () => loadFeedsByIds(db, semanticFeedIds, admin, language));
 
         const cacheKey = `search_${admin ? "admin" : "public"}_${keyword}_${language || "all"}`;
@@ -944,7 +972,7 @@ export function SearchService(): Hono<{
         })))).map(mapFeedSearchItem);
 
         const seen = new Set<number>();
-        const feed_list = [...semanticFeeds, ...keywordFeeds].filter((feed: any) => {
+        const feed_list = [...keywordFeeds, ...semanticFeeds].filter((feed: any) => {
             if (seen.has(feed.id)) {
                 return false;
             }

@@ -1,6 +1,7 @@
 import type { AIConfig } from "@rin/api";
 
 export const WEBHOOK_URL_KEY = "WEBHOOK_URL";
+export const SEARCH_VECTOR_SCORE_THRESHOLD_KEY = "search.vector_score_threshold";
 
 export const CLIENT_CONFIG_DEFAULTS = new Map(
   Object.entries({
@@ -30,6 +31,7 @@ export const SERVER_CONFIG_DEFAULTS = new Map(
     "webhook.content_type": "application/json",
     "webhook.headers": "{}",
     "webhook.body_template": "{\"content\":\"{{message}}\"}",
+    [SEARCH_VECTOR_SCORE_THRESHOLD_KEY]: 0.72,
   }),
 );
 

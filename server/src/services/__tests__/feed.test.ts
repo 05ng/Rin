@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { SEARCH_VECTOR_SCORE_THRESHOLD_KEY } from "@rin/config";
 import { FeedService, SearchService } from '../feed';
 import { Hono } from "hono";
 import type { Variables } from "../../core/hono-types";
@@ -718,6 +719,47 @@ describe('FeedService', () => {
             const enData = await enRes.json() as any;
             expect(enData.data.some((f: any) => f.title === 'Searchable EN')).toBe(true);
             expect(enData.data.some((f: any) => f.title === 'Searchable ZH')).toBe(false);
+        });
+
+        it('should filter low-score semantic search matches by configured threshold', async () => {
+            const exactResponse = await app.request('/', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer mock_token_1', 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: 'Magento ecommerce guide', content: 'Practical ecommerce upgrade notes', language: 'en', listed: true, draft: false, tags: []
+                })
+            }, env);
+            const exact = await exactResponse.json() as { insertedId: number };
+
+            const semanticResponse = await app.request('/', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer mock_token_1', 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: 'Lumina Tick unrelated article', content: 'A quiet calendar and scheduling article', language: 'en', listed: true, draft: false, tags: []
+                })
+            }, env);
+            const semantic = await semanticResponse.json() as { insertedId: number };
+
+            env.AI = {
+                run: async () => ({ data: [[0.1, 0.2, 0.3]] }),
+            } as unknown as Env['AI'];
+            env.ARTICLE_VECTORIZE = {
+                query: async () => ({
+                    count: 1,
+                    matches: [
+                        { id: 'feed:' + semantic.insertedId + ':chunk:0', score: 0.73, metadata: { feedId: semantic.insertedId } },
+                    ],
+                }),
+            } as unknown as Env['ARTICLE_VECTORIZE'];
+            await serverConfig.set(SEARCH_VECTOR_SCORE_THRESHOLD_KEY, '0.8', false);
+
+            const res = await app.request('/search/ecommerce', { method: 'GET' }, env);
+            expect(res.status).toBe(200);
+            const data = await res.json() as any;
+            const ids = data.data.map((feed: any) => feed.id);
+
+            expect(ids).toContain(exact.insertedId);
+            expect(ids).not.toContain(semantic.insertedId);
         });
     });
 });

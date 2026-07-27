@@ -1,3 +1,4 @@
+import { SEARCH_VECTOR_SCORE_THRESHOLD_KEY } from "@rin/config";
 import { SearchableSelect, SettingsBadge, SettingsCard, SettingsCardBody, SettingsCardHeader, SettingsCardRow } from "@rin/ui";
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Helmet } from "react-helmet-async";
@@ -470,6 +471,18 @@ export function Settings() {
             value={String(clientConfig.get("footer") ?? "")}
             onChange={(value) => {
               setConfigValue("client", "footer", value);
+            }}
+          />
+
+          <ItemTitle title={t("settings.search.title")} />
+          <ItemInput
+            title={t("settings.search.vector_score_threshold.title")}
+            description={t("settings.search.vector_score_threshold.desc")}
+            configKeyTitle={SEARCH_VECTOR_SCORE_THRESHOLD_KEY}
+            value={String(serverConfig.get(SEARCH_VECTOR_SCORE_THRESHOLD_KEY) ?? "")}
+            placeholder={String(serverConfig.default(SEARCH_VECTOR_SCORE_THRESHOLD_KEY) ?? "0.72")}
+            onChange={(value) => {
+              setConfigValue("server", SEARCH_VECTOR_SCORE_THRESHOLD_KEY, value);
             }}
           />
 

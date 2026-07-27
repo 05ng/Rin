@@ -356,6 +356,13 @@
       "desc": "设置显示于站点底部的内容（HTML）",
       "title": "站点底部内容"
     },
+    "search": {
+      "title": "搜索设置",
+      "vector_score_threshold": {
+        "title": "语义匹配分数",
+        "desc": "语义搜索结果需要达到的最低 Vectorize 匹配分数。调高可减少相关性较弱的文章。"
+      }
+    },
     "webhook": {
       "title": "Webhook",
       "url": {

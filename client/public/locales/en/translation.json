@@ -356,6 +356,13 @@
       "desc": "Set the footer content of the site (HTML)",
       "title": "Footer"
     },
+    "search": {
+      "title": "Search",
+      "vector_score_threshold": {
+        "title": "Semantic Match Score",
+        "desc": "Minimum Vectorize match score required for semantic-only search results. Use a higher value to reduce loosely related articles."
+      }
+    },
     "webhook": {
       "title": "Webhook",
       "url": {
