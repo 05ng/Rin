@@ -1,6 +1,7 @@
 import { getApp } from "./app-instance";
-import { getStorageObject } from "../utils/storage";
 import { path_join } from "../utils/path";
+import { drizzle } from "drizzle-orm/d1";
+import * as schema from "../db/schema";
 
 const ROOT_FEED_PATTERN = /^\/(rss\.xml|atom\.xml|rss\.json|feed\.json|feed\.xml)$/;
 const APP_PUBLIC_ROUTE_PATTERN = /^\/(favicon|favicon\.ico)(?:\/|$)/;
@@ -73,9 +74,15 @@ export async function handleFetch(request: Request, env: Env): Promise<Response>
       key += "index.html";
     }
 
-    const asset = await getStorageObject(env, key);
-    if (asset) {
-      return asset;
+    const db = drizzle(env.DB, { schema });
+    const result = await db.query.renderedPages.findFirst({
+        where: (pages, { eq }) => eq(pages.path, key),
+    });
+
+    if (result) {
+        return new Response(result.html, {
+            headers: { "Content-Type": "text/html" },
+        });
     }
   }
 
