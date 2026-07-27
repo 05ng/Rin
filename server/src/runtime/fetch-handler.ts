@@ -72,7 +72,13 @@ export async function handleFetch(request: Request, env: Env, ctx: ExecutionCont
 
     const asset = await getStorageObject(env, key);
     if (asset) {
-      return asset;
+      const newHeaders = new Headers(asset.headers);
+      newHeaders.set("Cache-Control", "private, no-store");
+      newHeaders.set("Vary", "User-Agent");
+      return new Response(asset.body, {
+        status: asset.status,
+        headers: newHeaders
+      });
     }
   }
 
@@ -97,7 +103,16 @@ export async function handleFetch(request: Request, env: Env, ctx: ExecutionCont
 
   const indexResponse = await serveSpaEntry(request, env);
   if (indexResponse) {
-    return indexResponse;
+    const newHeaders = new Headers(indexResponse.headers);
+    newHeaders.delete("ETag");
+    newHeaders.delete("Last-Modified");
+    newHeaders.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    
+    return new Response(indexResponse.body, {
+      status: indexResponse.status,
+      statusText: indexResponse.statusText,
+      headers: newHeaders
+    });
   }
 
   return new Response("Hi", { status: 200 });

@@ -198,6 +198,7 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
       [assets]
       directory = "./dist/client"
       binding = "ASSETS"
+      run_worker_first = true
       ${buildWranglerTriggersConfig(preview)}
       ${buildWranglerObservabilityConfig(preview)}
 
