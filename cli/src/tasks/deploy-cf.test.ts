@@ -6,7 +6,9 @@ import {
   buildWranglerTriggersConfig,
   buildWranglerVectorizeConfig,
   buildWranglerWorkflowConfig,
+  buildVectorizePermissionHint,
   collectWorkerSecrets,
+  isVectorizePermissionError,
 } from "./deploy-cf";
 
 describe("collectWorkerSecrets", () => {
@@ -114,6 +116,21 @@ describe("buildWranglerVectorizeConfig", () => {
 
     expect(config).toContain('binding = "ARTICLE_VECTORIZE"');
     expect(config).toContain('index_name = "rin-server-articles"');
+  });
+});
+
+describe("Vectorize deploy helpers", () => {
+  it("detects permission failures from Wrangler output", () => {
+    expect(isVectorizePermissionError("Authentication error [code: 10000]")).toBe(true);
+    expect(isVectorizePermissionError("Please ensure it has the correct permissions for this operation.")).toBe(true);
+    expect(isVectorizePermissionError("already exists")).toBe(false);
+  });
+
+  it("explains the required token permission", () => {
+    const hint = buildVectorizePermissionHint("rin-server-articles");
+
+    expect(hint).toContain("rin-server-articles");
+    expect(hint).toContain("Account > Vectorize > Edit/Write");
   });
 });
 

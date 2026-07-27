@@ -36,6 +36,20 @@ function isVectorizeAlreadyPresentError(stderr: string) {
   return stderr.includes("already exists") || stderr.includes("already taken") || stderr.includes("[code: 11009]");
 }
 
+export function isVectorizePermissionError(output: string) {
+  const lower = output.toLowerCase();
+  return lower.includes("authentication error")
+    || lower.includes("correct permissions")
+    || lower.includes("[code: 10000]");
+}
+
+export function buildVectorizePermissionHint(indexName: string) {
+  return stripIndent(`
+    Cloudflare rejected Vectorize setup for "${indexName}".
+    Update CLOUDFLARE_API_TOKEN to include Account > Vectorize > Edit/Write for this account, or create the Vectorize index and language metadata index manually before deploying.
+  `);
+}
+
 export function buildWranglerCustomDomainConfig(canonicalHost: string, preview: boolean) {
   if (preview || !canonicalHost) {
     return "";
@@ -294,9 +308,25 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
 
   const vectorizeCreate = await $`${bunExec} x wrangler vectorize create ${articleVectorizeIndexName} --dimensions=768 --metric=cosine`.quiet().nothrow();
   if (vectorizeCreate.exitCode !== 0 && !isVectorizeAlreadyPresentError(vectorizeCreate.stderr.toString())) {
+    const output = `${vectorizeCreate.stdout.toString()}\n${vectorizeCreate.stderr.toString()}`;
     console.error(`Failed to create Vectorize index "${articleVectorizeIndexName}"`);
+    if (isVectorizePermissionError(output)) {
+      console.error(buildVectorizePermissionHint(articleVectorizeIndexName));
+    }
     console.error(stripIndent(vectorizeCreate.stdout.toString()));
     console.error(stripIndent(vectorizeCreate.stderr.toString()));
+    process.exit(1);
+  }
+
+  const vectorizeMetadataCreate = await $`${bunExec} x wrangler vectorize create-metadata-index ${articleVectorizeIndexName} --property-name=language --type=string`.quiet().nothrow();
+  if (vectorizeMetadataCreate.exitCode !== 0 && !isVectorizeAlreadyPresentError(vectorizeMetadataCreate.stderr.toString())) {
+    const output = `${vectorizeMetadataCreate.stdout.toString()}\n${vectorizeMetadataCreate.stderr.toString()}`;
+    console.error(`Failed to create Vectorize metadata index "language" on "${articleVectorizeIndexName}"`);
+    if (isVectorizePermissionError(output)) {
+      console.error(buildVectorizePermissionHint(articleVectorizeIndexName));
+    }
+    console.error(stripIndent(vectorizeMetadataCreate.stdout.toString()));
+    console.error(stripIndent(vectorizeMetadataCreate.stderr.toString()));
     process.exit(1);
   }
 
