@@ -150,45 +150,7 @@ export function WritingPage({ id }: { id?: number }) {
   );
   const [translationCandidates, setTranslationCandidates] = useState<TranslationCandidate[]>([]);
   const [publishing, setPublishing] = useState(false)
-  const [translating, setTranslating] = useState(false)
-  const { showAlert, AlertUI } = useAlert()
-  
-  async function translateButton() {
-    if (translating || publishing) return;
-    if (!title || !content) {
-      showAlert(t("title_empty"));
-      return;
-    }
-    setTranslating(true);
-    const { data, error } = await client.feed.translate({
-      title,
-      summary,
-      content
-    });
-    setTranslating(false);
 
-    if (error) {
-      showAlert(error.value as string);
-      return;
-    }
-
-    if (data) {
-      if (id !== undefined) {
-        // If we're editing an existing article, redirect to a new draft with translated content
-        const newCache = Cache.with();
-        newCache.set("title", data.title);
-        newCache.set("summary", data.summary);
-        newCache.set("content", data.content);
-        window.location.href = `/admin/writing?language=zh-CN&translationOf=${id}`;
-      } else {
-        // Just update in place if it's already a new draft
-        setTitle(data.title);
-        setSummary(data.summary);
-        setContent(data.content);
-        setLanguage("zh-CN");
-      }
-    }
-  }
 
   function publishButton() {
     if (publishing) return;
@@ -305,7 +267,7 @@ export function WritingPage({ id }: { id?: number }) {
       <button
         onClick={publishButton}
         className={`inline-flex items-center justify-center gap-2 rounded-xl bg-theme px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-theme-hover active:bg-theme-active disabled:cursor-not-allowed disabled:opacity-60 ${className ?? ""}`}
-        disabled={publishing || translating}
+        disabled={publishing}
       >
         {publishing && <Loading type="spin" height={16} width={16} />}
         <span>{t('publish.title')}</span>
@@ -313,19 +275,7 @@ export function WritingPage({ id }: { id?: number }) {
     );
   }
 
-  function TranslateButton({ className }: { className?: string }) {
-    return (
-      <button
-        onClick={translateButton}
-        className={`inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-amber-600 active:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60 ${className ?? ""}`}
-        disabled={publishing || translating}
-        title={t('ai_translate.tooltip')}
-      >
-        {translating && <Loading type="spin" height={16} width={16} />}
-        <span>{t('ai_translate.button')}</span>
-      </button>
-    );
-  }
+
 
   function MetaInput({ className }: { className?: string }) {
     return (
@@ -338,7 +288,6 @@ export function WritingPage({ id }: { id?: number }) {
               </p>
             </div>
             <div className="flex gap-2">
-              {language === 'en' && <TranslateButton className="w-auto" />}
               <PublishButton className="w-auto" />
             </div>
           </div>

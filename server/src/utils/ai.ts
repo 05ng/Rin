@@ -29,8 +29,6 @@ export const WORKER_AI_MODELS: Record<string, string> = {
 export const AI_SUMMARY_SYSTEM_PROMPT =
     "你是一个中文内容摘要助手。请用简洁、准确、自然的中文总结用户提供的内容，不超过200字，不要添加原文没有的信息，不要输出标题或项目符号。";
 
-export const AI_TRANSLATION_SYSTEM_PROMPT =
-    "你是一个专业的翻译助手。请将用户提供的英文内容准确、流畅地翻译为简体中文。请保持原有的格式（如 Markdown 标签、代码块等），不要添加任何原文没有的解释或信息。";
 
 /**
  * Get full Worker AI model ID from short name
@@ -268,70 +266,6 @@ export async function generateAISummaryResult(
         console.error("[AI Summary] Failed to generate summary:", error);
         return {
             summary: null,
-            skipped: false,
-            error: error instanceof Error ? error.message : String(error),
-        };
-    }
-}
-
-export async function generateAITranslationResult(
-    env: Env,
-    serverConfig: ConfigReader,
-    content: string
-): Promise<{ translation: string | null; skipped: boolean; error?: string }> {
-    const config = await getAIConfig(serverConfig);
-
-    if (!config.enabled) {
-        return { translation: null, skipped: true };
-    }
-
-    const { provider, model } = config;
-    const maxContentLength = 8000;
-    const truncatedContent = content.length > maxContentLength
-        ? content.slice(0, maxContentLength) + "\n\n...(content truncated due to length limits)"
-        : content;
-
-    const translationMessages = [
-        { role: "system" as const, content: AI_TRANSLATION_SYSTEM_PROMPT },
-        { role: "user" as const, content: truncatedContent },
-    ];
-
-    try {
-        let result: string | null;
-
-        if (provider === 'worker-ai') {
-            const fullModelName = getWorkerAIModelId(model);
-            result = await executeWorkerAI(
-                env,
-                fullModelName,
-                translationMessages,
-            );
-        } else {
-            result = await executeExternalAI(config, translationMessages);
-        }
-
-        if (!result || !result.trim()) {
-            return {
-                translation: null,
-                skipped: false,
-                error: `Empty response from AI provider "${provider}" using model "${model}"`,
-            };
-        }
-
-        const cleaned = stripReasoningTags(result);
-        if (!cleaned.trim()) {
-            return {
-                translation: null,
-                skipped: false,
-                error: `AI response contained only reasoning tags with no final answer (provider "${provider}", model "${model}")`,
-            };
-        }
-
-        return { translation: cleaned, skipped: false };
-    } catch (error) {
-        console.error("[AI Translation] Failed to generate translation:", error);
-        return {
-            translation: null,
             skipped: false,
             error: error instanceof Error ? error.message : String(error),
         };
