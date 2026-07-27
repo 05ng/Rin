@@ -721,6 +721,23 @@ describe('FeedService', () => {
             expect(enData.data.some((f: any) => f.title === 'Searchable ZH')).toBe(false);
         });
 
+        it('should match hyphenated keyword variants', async () => {
+            const createResponse = await app.request('/', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer mock_token_1', 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: 'Magento e-commerce upgrade', content: 'Practical modernization notes', language: 'en', listed: true, draft: false, tags: []
+                })
+            }, env);
+            const created = await createResponse.json() as { insertedId: number };
+
+            const res = await app.request('/search/ecommerce', { method: 'GET' }, env);
+            expect(res.status).toBe(200);
+            const data = await res.json() as any;
+
+            expect(data.data.map((feed: any) => feed.id)).toContain(created.insertedId);
+        });
+
         it('should filter low-score semantic search matches by configured threshold', async () => {
             const exactResponse = await app.request('/', {
                 method: 'POST',

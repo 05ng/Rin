@@ -904,14 +904,51 @@ async function loadFeedsByIds(db: DB, ids: number[], admin: boolean, language: A
     return ids.map((id) => byId.get(id)).filter(Boolean).map(mapFeedSearchItem);
 }
 
+function buildKeywordSearchTerms(keyword: string) {
+    const trimmed = keyword.trim();
+    const terms = new Set<string>();
+
+    if (trimmed.length === 0) {
+        return [] as string[];
+    }
+
+    terms.add(trimmed);
+
+    const compacted = trimmed.replace(/[-_\s]+/g, "");
+    if (compacted.length > 0) {
+        terms.add(compacted);
+    }
+
+    const hyphenated = trimmed.replace(/[_\s]+/g, "-");
+    if (hyphenated.length > 0) {
+        terms.add(hyphenated);
+    }
+
+    const ecommerceHyphenated = trimmed.replace(/e[-_\s]?commerce/gi, "e-commerce");
+    if (ecommerceHyphenated.length > 0) {
+        terms.add(ecommerceHyphenated);
+    }
+
+    const ecommerceCompacted = trimmed.replace(/e[-_\s]+commerce/gi, "ecommerce");
+    if (ecommerceCompacted.length > 0) {
+        terms.add(ecommerceCompacted);
+    }
+
+    return Array.from(terms);
+}
+
 function buildKeywordSearchWhere(keyword: string, language: ArticleLanguage | null) {
-    const searchKeyword = `%${keyword}%`;
-    let whereClause = or(
-        like(feeds.title, searchKeyword),
-        like(feeds.content, searchKeyword),
-        like(feeds.summary, searchKeyword),
-        like(feeds.alias, searchKeyword)
-    ) as any;
+    const conditions = buildKeywordSearchTerms(keyword).flatMap((term) => {
+        const searchKeyword = `%${term}%`;
+        return [
+            like(feeds.title, searchKeyword),
+            like(feeds.content, searchKeyword),
+            like(feeds.summary, searchKeyword),
+            like(feeds.alias, searchKeyword),
+        ];
+    });
+
+    let whereClause = or(...conditions) as any;
 
     if (language) {
         whereClause = and(whereClause, eq(feeds.language, language));
