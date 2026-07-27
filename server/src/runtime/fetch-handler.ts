@@ -1,4 +1,6 @@
 import { getApp } from "./app-instance";
+import { getStorageObject } from "../utils/storage";
+import { path_join } from "../utils/path";
 
 const ROOT_FEED_PATTERN = /^\/(rss\.xml|atom\.xml|rss\.json|feed\.json|feed\.xml)$/;
 const APP_PUBLIC_ROUTE_PATTERN = /^\/(favicon|favicon\.ico)(?:\/|$)/;
@@ -60,6 +62,22 @@ async function serveSpaEntry(request: Request, env: Env) {
 export async function handleFetch(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const pathname = url.pathname;
+
+  const BOT_AGENTS = ["googlebot", "bingbot", "yahoo", "duckduckbot", "baiduspider", "yandex"];
+  const userAgent = request.headers.get("User-Agent")?.toLowerCase() || "";
+
+  if (BOT_AGENTS.some((bot) => userAgent.includes(bot))) {
+    const folder = env.S3_CACHE_FOLDER || "cache/";
+    let key = path_join(folder, pathname);
+    if (key.endsWith("/")) {
+      key += "index.html";
+    }
+
+    const asset = await getStorageObject(env, key);
+    if (asset) {
+      return asset;
+    }
+  }
 
   if (isRootFeedRequest(pathname)) {
     return getApp().fetch(request, env);
