@@ -26,6 +26,10 @@ describe("handleFetch", () => {
           fetch: assetFetch,
         },
       } as unknown as Env,
+      {
+        waitUntil: () => {},
+        passThroughOnException: () => {},
+      } as unknown as ExecutionContext
     );
 
     expect(await response.text()).toBe("asset-body");
@@ -46,6 +50,10 @@ describe("handleFetch", () => {
           fetch: assetFetch,
         },
       } as unknown as Env,
+      {
+        waitUntil: () => {},
+        passThroughOnException: () => {},
+      } as unknown as ExecutionContext
     );
 
     expect(await response.text()).toBe("blob-body");
