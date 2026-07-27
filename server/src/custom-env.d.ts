@@ -6,6 +6,7 @@ declare global {
     RIN_GITHUB_CLIENT_SECRET?: string;
     RIN_GOOGLE_CLIENT_ID?: string;
     RIN_GOOGLE_CLIENT_SECRET?: string;
+    CANONICAL_HOST?: string;
     TASK_QUEUE?: Queue<QueueTask>;
     R2_BUCKET?: R2Bucket;
     AI?: any;

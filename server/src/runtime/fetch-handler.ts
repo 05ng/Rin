@@ -4,6 +4,40 @@ import { path_join } from "../utils/path";
 
 const ROOT_FEED_PATTERN = /^\/(rss\.xml|atom\.xml|rss\.json|feed\.json|feed\.xml|sitemap\.xml)$/;
 const APP_PUBLIC_ROUTE_PATTERN = /^\/(favicon|favicon\.ico)(?:\/|$)/;
+const DEFAULT_CANONICAL_HOST = "agenticlife.org";
+const PRERENDER_USER_AGENTS = [
+  "googlebot",
+  "bingbot",
+  "yahoo",
+  "duckduckbot",
+  "baiduspider",
+  "yandex",
+  "facebookexternalhit",
+  "twitterbot",
+  "slackbot",
+  "linkedinbot",
+  "discordbot",
+  "whatsapp",
+];
+
+function canonicalRedirect(url: URL, env: Env) {
+  const canonicalHost = env.CANONICAL_HOST || DEFAULT_CANONICAL_HOST;
+  const redirectHosts = new Set([canonicalHost, `www.${canonicalHost}`]);
+
+  if (!redirectHosts.has(url.hostname)) {
+    return null;
+  }
+
+  if (url.protocol === "https:" && url.hostname === canonicalHost) {
+    return null;
+  }
+
+  const canonicalUrl = new URL(url);
+  canonicalUrl.protocol = "https:";
+  canonicalUrl.hostname = canonicalHost;
+
+  return Response.redirect(canonicalUrl.toString(), 308);
+}
 
 function isApiRequest(pathname: string) {
   return pathname.startsWith("/api/");
@@ -61,12 +95,16 @@ async function serveSpaEntry(request: Request, env: Env) {
 
 export async function handleFetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(request.url);
+  const redirectResponse = canonicalRedirect(url, env);
+  if (redirectResponse) {
+    return redirectResponse;
+  }
+
   const pathname = url.pathname;
 
-  const BOT_AGENTS = ["googlebot", "bingbot", "yahoo", "duckduckbot", "baiduspider", "yandex"];
   const userAgent = request.headers.get("User-Agent")?.toLowerCase() || "";
 
-  if (BOT_AGENTS.some((bot) => userAgent.includes(bot))) {
+  if (PRERENDER_USER_AGENTS.some((bot) => userAgent.includes(bot))) {
     const folder = env.S3_CACHE_FOLDER || "cache/";
     let key = pathname === "/" ? path_join(folder, "index.html") : path_join(folder, pathname);
 

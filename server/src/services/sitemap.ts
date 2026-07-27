@@ -4,6 +4,35 @@ import type { AppContext } from "../core/hono-types";
 import { feeds } from "../db/schema";
 import { profileAsync } from "../core/server-timing";
 
+function articlePath(id: number, alias: string | null, language: string) {
+    const path = alias ? `/${encodeURIComponent(alias)}` : `/feed/${id}`;
+    return language === 'en' ? path : `/${language}${path}`;
+}
+
+function appendUrl(
+    xml: string,
+    seenUrls: Set<string>,
+    loc: string,
+    options: { lastMod?: string; changefreq: string; priority: string },
+) {
+    if (seenUrls.has(loc)) {
+        return xml;
+    }
+
+    seenUrls.add(loc);
+
+    xml += '  <url>\n';
+    xml += `    <loc>${loc}</loc>\n`;
+    if (options.lastMod) {
+        xml += `    <lastmod>${options.lastMod}</lastmod>\n`;
+    }
+    xml += `    <changefreq>${options.changefreq}</changefreq>\n`;
+    xml += `    <priority>${options.priority}</priority>\n`;
+    xml += '  </url>\n';
+
+    return xml;
+}
+
 export function SitemapService(): Hono {
     const app = new Hono();
 
@@ -18,6 +47,7 @@ export function SitemapService(): Hono {
             columns: {
                 id: true,
                 alias: true,
+                language: true,
                 updatedAt: true
             }
         }));
@@ -34,31 +64,26 @@ export function SitemapService(): Hono {
 
         let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
         xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+        const seenUrls = new Set<string>();
 
         // Add static routes
         for (const route of staticRoutes) {
-            xml += '  <url>\n';
-            xml += `    <loc>${frontendUrl}${route}</loc>\n`;
-            xml += '    <changefreq>daily</changefreq>\n';
-            xml += '    <priority>0.8</priority>\n';
-            xml += '  </url>\n';
+            xml = appendUrl(xml, seenUrls, `${frontendUrl}${route}`, {
+                changefreq: 'daily',
+                priority: '0.8',
+            });
         }
 
         // Add dynamic feeds
         for (const feed of feedList) {
-            const urlPath = feed.alias 
-                ? `/${encodeURIComponent(feed.alias)}` 
-                : `/feed/${feed.id}`;
+            const urlPath = articlePath(feed.id, feed.alias, feed.language);
             const lastMod = feed.updatedAt ? feed.updatedAt.toISOString().split('T')[0] : '';
-            
-            xml += '  <url>\n';
-            xml += `    <loc>${frontendUrl}${urlPath}</loc>\n`;
-            if (lastMod) {
-                xml += `    <lastmod>${lastMod}</lastmod>\n`;
-            }
-            xml += '    <changefreq>weekly</changefreq>\n';
-            xml += '    <priority>0.6</priority>\n';
-            xml += '  </url>\n';
+
+            xml = appendUrl(xml, seenUrls, `${frontendUrl}${urlPath}`, {
+                lastMod,
+                changefreq: 'weekly',
+                priority: '0.6',
+            });
         }
 
         xml += '</urlset>';

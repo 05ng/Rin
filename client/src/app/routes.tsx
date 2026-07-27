@@ -154,7 +154,7 @@ export function AppRoutes() {
       </AppRoute>
 
       <TocRoute path="/feed/:id">
-        {(params, toc, cleanup) => <FeedPage id={params.id || ""} TOC={toc} clean={cleanup} />}
+        {(params, toc, cleanup) => <FeedPage id={params.id || ""} routeLang="en" TOC={toc} clean={cleanup} />}
       </TocRoute>
 
       <TocRoute path="/:lang/feed/:id">
@@ -168,7 +168,7 @@ export function AppRoutes() {
       </TocRoute>
 
       <TocRoute path="/:alias">
-        {(params, toc, cleanup) => <FeedPage id={params.alias || ""} TOC={toc} clean={cleanup} />}
+        {(params, toc, cleanup) => <FeedPage id={params.alias || ""} routeLang="en" TOC={toc} clean={cleanup} />}
       </TocRoute>
 
       <TocRoute path="/:lang/:alias">

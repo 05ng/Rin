@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
 
 const getAppFetch = mock();
+const getStorageObject = mock();
 
 mock.module("../app-instance", () => ({
   getApp: () => ({
@@ -8,9 +9,97 @@ mock.module("../app-instance", () => ({
   }),
 }));
 
+mock.module("../../utils/storage", () => ({
+  getStorageObject,
+}));
+
 describe("handleFetch", () => {
   afterEach(() => {
     getAppFetch.mockReset();
+    getStorageObject.mockReset();
+  });
+
+  it("redirects the production apex host from HTTP to HTTPS", async () => {
+    const { handleFetch } = await import("../fetch-handler");
+
+    const response = await handleFetch(
+      new Request("http://agenticlife.org/about?ref=test"),
+      {} as unknown as Env,
+      {
+        waitUntil: () => {},
+        passThroughOnException: () => {},
+      } as unknown as ExecutionContext
+    );
+
+    expect(response.status).toBe(308);
+    expect(response.headers.get("Location")).toBe("https://agenticlife.org/about?ref=test");
+    expect(getAppFetch).toHaveBeenCalledTimes(0);
+  });
+
+  it("redirects the www host to the canonical apex host", async () => {
+    const { handleFetch } = await import("../fetch-handler");
+
+    const response = await handleFetch(
+      new Request("https://www.agenticlife.org/en/about"),
+      {} as unknown as Env,
+      {
+        waitUntil: () => {},
+        passThroughOnException: () => {},
+      } as unknown as ExecutionContext
+    );
+
+    expect(response.status).toBe(308);
+    expect(response.headers.get("Location")).toBe("https://agenticlife.org/en/about");
+    expect(getAppFetch).toHaveBeenCalledTimes(0);
+  });
+
+  it("uses CANONICAL_HOST when redirecting production hosts", async () => {
+    const { handleFetch } = await import("../fetch-handler");
+
+    const response = await handleFetch(
+      new Request("https://www.example.com/en/about"),
+      {
+        CANONICAL_HOST: "example.com",
+      } as unknown as Env,
+      {
+        waitUntil: () => {},
+        passThroughOnException: () => {},
+      } as unknown as ExecutionContext
+    );
+
+    expect(response.status).toBe(308);
+    expect(response.headers.get("Location")).toBe("https://example.com/en/about");
+    expect(getAppFetch).toHaveBeenCalledTimes(0);
+  });
+
+  it("serves prerendered HTML to social link preview crawlers", async () => {
+    getStorageObject.mockResolvedValue(new Response("<html>preview</html>", {
+      headers: {
+        "Content-Type": "text/html",
+      },
+    }));
+
+    const { handleFetch } = await import("../fetch-handler");
+
+    const response = await handleFetch(
+      new Request("https://agenticlife.org/en/about", {
+        headers: {
+          "User-Agent": "facebookexternalhit/1.1",
+        },
+      }),
+      {
+        S3_CACHE_FOLDER: "cache/",
+      } as unknown as Env,
+      {
+        waitUntil: () => {},
+        passThroughOnException: () => {},
+      } as unknown as ExecutionContext
+    );
+
+    expect(await response.text()).toBe("<html>preview</html>");
+    expect(response.headers.get("Vary")).toBe("User-Agent");
+    expect(getStorageObject).toHaveBeenCalledWith(expect.anything(), "cache/en/about");
+    expect(getAppFetch).toHaveBeenCalledTimes(0);
   });
 
   it("serves static assets directly when the asset exists", async () => {

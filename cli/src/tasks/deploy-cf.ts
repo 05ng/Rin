@@ -31,6 +31,22 @@ function isQueueAlreadyPresentError(stderr: string) {
   return stderr.includes("already exists") || stderr.includes("already taken") || stderr.includes("[code: 11009]");
 }
 
+export function buildWranglerCustomDomainConfig(canonicalHost: string, preview: boolean) {
+  if (preview || !canonicalHost) {
+    return "";
+  }
+
+  return stripIndent(`
+    [[routes]]
+    pattern = "${canonicalHost}"
+    custom_domain = true
+
+    [[routes]]
+    pattern = "www.${canonicalHost}"
+    custom_domain = true
+  `);
+}
+
 export function collectWorkerSecrets(source: Record<string, string | undefined> = process.env) {
   const secrets: Record<string, string> = {};
 
@@ -165,6 +181,7 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
   const avatar = env("AVATAR", "");
   const pageSize = env("PAGE_SIZE", "5");
   const rssEnable = env("RSS_ENABLE", "false");
+  const canonicalHost = env("CANONICAL_HOST", "agenticlife.org");
 
   let finalS3Endpoint = s3Endpoint;
   let finalS3Bucket = s3Bucket;
@@ -194,6 +211,8 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
       main = "${serverMain}"
       compatibility_date = "2026-01-20"
       compatibility_flags = ["nodejs_compat"]
+      workers_dev = true
+      ${buildWranglerCustomDomainConfig(canonicalHost, preview)}
 
       [assets]
       directory = "./dist/client"
@@ -219,6 +238,7 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
       AVATAR = "${avatar}"
       PAGE_SIZE = "${pageSize}"
       RSS_ENABLE = "${rssEnable}"
+      CANONICAL_HOST = "${canonicalHost}"
 
       [placement]
       mode = "smart"

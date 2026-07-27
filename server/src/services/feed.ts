@@ -38,6 +38,11 @@ function parseArticleLanguage(value: unknown): ArticleLanguage | null {
         : null;
 }
 
+function articlePath(id: number, alias: string | null, language: ArticleLanguage | string) {
+    const path = alias ? `/${encodeURIComponent(alias)}` : `/feed/${id}`;
+    return language === "en" ? path : `/${language}${path}`;
+}
+
 function parseTranslationOf(value: unknown): number | null | undefined {
     if (value === undefined) {
         return undefined;
@@ -345,7 +350,7 @@ export function FeedService(): Hono<{
 
         if (env.SEO_WORKFLOW && listed && !draft) {
             const baseUrl = new URL(c.req.url).origin;
-            const urlPath = alias ? `/${language}/${alias}` : `/${language}/feed/${result[0].insertedId}`;
+            const urlPath = articlePath(result[0].insertedId, alias || null, language);
             c.executionCtx.waitUntil(
                 env.SEO_WORKFLOW.create({ params: { feedId: result[0].insertedId, urlPath, baseUrl } }).catch(console.error)
             );
@@ -673,7 +678,7 @@ export function FeedService(): Hono<{
 
         if (env.SEO_WORKFLOW && isListed && !isDraft) {
             const baseUrl = new URL(c.req.url).origin;
-            const urlPath = alias ? `/${language}/${alias}` : (feed.alias ? `/${language}/${feed.alias}` : `/${language}/feed/${id_num}`);
+            const urlPath = articlePath(id_num, alias || feed.alias || null, language);
             c.executionCtx.waitUntil(
                 env.SEO_WORKFLOW.create({ params: { feedId: id_num, urlPath, baseUrl } }).catch(console.error)
             );
@@ -749,7 +754,7 @@ export function FeedService(): Hono<{
         const env = c.get('env');
         if (env.SEO_WORKFLOW) {
             const baseUrl = new URL(c.req.url).origin;
-            const urlPath = feed.alias ? `/${feed.language}/${feed.alias}` : `/${feed.language}/feed/${id_num}`;
+            const urlPath = articlePath(id_num, feed.alias, feed.language);
             c.executionCtx.waitUntil(
                 env.SEO_WORKFLOW.create({ params: { feedId: id_num, urlPath, baseUrl, isDelete: true } }).catch(console.error)
             );

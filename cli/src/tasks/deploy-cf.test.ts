@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  buildWranglerCustomDomainConfig,
   buildWranglerObservabilityConfig,
   buildWranglerQueueConfig,
   buildWranglerTriggersConfig,
@@ -54,6 +55,20 @@ describe("buildWranglerTriggersConfig", () => {
   it("includes cron triggers for production deploys", () => {
     expect(buildWranglerTriggersConfig(false)).toContain("[triggers]");
     expect(buildWranglerTriggersConfig(false)).toContain('crons = ["*/20 * * * *"]');
+  });
+});
+
+describe("buildWranglerCustomDomainConfig", () => {
+  it("omits custom domains for preview deploys", () => {
+    expect(buildWranglerCustomDomainConfig("agenticlife.org", true)).toBe("");
+  });
+
+  it("includes apex and www custom domains for production deploys", () => {
+    const config = buildWranglerCustomDomainConfig("agenticlife.org", false);
+
+    expect(config).toContain('pattern = "agenticlife.org"');
+    expect(config).toContain('pattern = "www.agenticlife.org"');
+    expect(config).toContain("custom_domain = true");
   });
 });
 
