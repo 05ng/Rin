@@ -28,6 +28,10 @@ export default defineConfig(({ mode }) => {
           target: serverTarget,
           changeOrigin: false,
         },
+        "/sitemap.xml": {
+          target: serverTarget,
+          changeOrigin: false,
+        },
         "/rss.xml": {
           target: serverTarget,
           changeOrigin: false,

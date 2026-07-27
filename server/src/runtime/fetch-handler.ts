@@ -2,7 +2,7 @@ import { getApp } from "./app-instance";
 import { getStorageObject } from "../utils/storage";
 import { path_join } from "../utils/path";
 
-const ROOT_FEED_PATTERN = /^\/(rss\.xml|atom\.xml|rss\.json|feed\.json|feed\.xml)$/;
+const ROOT_FEED_PATTERN = /^\/(rss\.xml|atom\.xml|rss\.json|feed\.json|feed\.xml|sitemap\.xml)$/;
 const APP_PUBLIC_ROUTE_PATTERN = /^\/(favicon|favicon\.ico)(?:\/|$)/;
 
 function isApiRequest(pathname: string) {
