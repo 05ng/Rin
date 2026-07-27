@@ -68,10 +68,7 @@ export async function handleFetch(request: Request, env: Env, ctx: ExecutionCont
 
   if (BOT_AGENTS.some((bot) => userAgent.includes(bot))) {
     const folder = env.S3_CACHE_FOLDER || "cache/";
-    let key = path_join(folder, pathname);
-    if (key.endsWith("/")) {
-      key += "index.html";
-    }
+    let key = pathname === "/" ? path_join(folder, "index.html") : path_join(folder, pathname);
 
     const asset = await getStorageObject(env, key);
     if (asset) {

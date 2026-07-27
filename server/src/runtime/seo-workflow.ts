@@ -22,8 +22,7 @@ export class SEORenderWorkflow extends WorkflowEntrypoint<Env, SEORenderParams> 
 
     if (isDelete && urlPath) {
       await step.do(`delete-${urlPath}`, async () => {
-        let key = path_join(folder, urlPath);
-        if (key.endsWith("/")) key += "index.html";
+        let key = urlPath === "/" ? path_join(folder, "index.html") : path_join(folder, urlPath);
         console.log(`[SEO Workflow] Deleting ${key} from R2`);
         await this.env.R2_BUCKET!.delete(key);
       });
@@ -44,8 +43,7 @@ export class SEORenderWorkflow extends WorkflowEntrypoint<Env, SEORenderParams> 
       await step.do(`render-${path}`, async () => {
         const fullUrl = `${baseUrl}${path}`;
         const folder = this.env.S3_CACHE_FOLDER || "cache/";
-        let key = path_join(folder, path);
-        if (key.endsWith("/")) key += "index.html";
+        let key = path === "/" ? path_join(folder, "index.html") : path_join(folder, path);
 
         console.log(`[SEO Workflow] Rendering ${fullUrl} to R2 key ${key}`);
 
