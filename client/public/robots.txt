@@ -3,3 +3,5 @@ Disallow: /writing/
 
 User-agent: *
 Allow: /
+
+Sitemap: https://agenticlife.org/sitemap.xml

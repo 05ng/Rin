@@ -16,7 +16,8 @@ export async function runSeoRender() {
   const forcePathStyle = env.S3_FORCE_PATH_STYLE === "true";
 
   if (!baseUrl || !region || !endpoint || !accessKeyId || !secretAccessKey || !bucket) {
-    throw new Error("SEO render env is incomplete");
+    console.warn("SEO render env is incomplete, skipping SEO render.");
+    return;
   }
 
   const s3 = new S3Client({
@@ -34,29 +35,34 @@ export async function runSeoRender() {
     console.info(`Saved ${accessHost}/${fileName}.`);
   }
 
-  const fetchedLinks = new Set<string>();
-  const browser = await puppeteer.launch({ args: ["--no-sandbox", "--disable-setuid-sandbox"] });
-  const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36";
+  try {
+    const fetchedLinks = new Set<string>();
+    const browser = await puppeteer.launch({ args: ["--no-sandbox", "--disable-setuid-sandbox"] });
+    const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36";
 
-  async function fetchPage(url: string): Promise<void> {
-    const page = await browser.newPage();
-    await page.setUserAgent(ua);
-    const response = await page.goto(url, { waitUntil: "networkidle2" });
-    if (!response) return;
-    if (response.ok() && response.headers()["content-type"]?.includes("text/html")) {
-      await saveFile(url, await page.content());
-      fetchedLinks.add(url);
-      const links = await page.evaluate(() => Array.from(document.querySelectorAll("a")).map((anchor) => anchor.href));
-      for (const link of links.filter((candidate) => candidate.startsWith(baseUrl) || (containsKey && candidate.includes(containsKey)))) {
-        const next = link.split("#")[0];
-        if (!fetchedLinks.has(next)) {
-          await fetchPage(next);
+    async function fetchPage(url: string): Promise<void> {
+      const page = await browser.newPage();
+      await page.setUserAgent(ua);
+      const response = await page.goto(url, { waitUntil: "networkidle2" });
+      if (!response) return;
+      if (response.ok() && response.headers()["content-type"]?.includes("text/html")) {
+        await saveFile(url, await page.content());
+        fetchedLinks.add(url);
+        const links = await page.evaluate(() => Array.from(document.querySelectorAll("a")).map((anchor) => anchor.href));
+        for (const link of links.filter((candidate) => candidate.startsWith(baseUrl) || (containsKey && candidate.includes(containsKey)))) {
+          const next = link.split("#")[0];
+          if (!fetchedLinks.has(next)) {
+            await fetchPage(next);
+          }
         }
       }
+      await page.close();
     }
-    await page.close();
-  }
 
-  await fetchPage(baseUrl);
-  await browser.close();
+    await fetchPage(baseUrl);
+    await browser.close();
+  } catch (error) {
+    console.error("SEO render failed:", error);
+    console.warn("Skipping SEO render due to errors. Deployment will continue.");
+  }
 }
