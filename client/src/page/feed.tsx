@@ -13,7 +13,6 @@ import { client } from "../app/runtime";
 import { ClientConfigContext } from "../state/config";
 import { ProfileContext } from "../state/profile";
 import { useSiteConfig } from "../hooks/useSiteConfig";
-import { siteName } from "../utils/constants";
 import { timeago } from "../utils/timeago";
 import { Button } from "../components/button";
 import { Tips } from "../components/tips";

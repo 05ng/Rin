@@ -1,5 +1,4 @@
 import { useContext, useEffect, useRef, useState } from "react"
-import { Helmet } from 'react-helmet-async'
 import { Link, useSearch } from "wouter"
 import { FeedCard } from "../components/feed_card"
 import { Waiting } from "../components/loading"
@@ -8,7 +7,6 @@ import { client } from "../app/runtime"
 import { ProfileContext } from "../state/profile"
 
 import { useSiteConfig } from "../hooks/useSiteConfig";
-import { siteName } from "../utils/constants"
 import { tryInt } from "../utils/int"
 import type { ArticleLanguage } from "@rin/api";
 import { useTranslation } from "react-i18next";
