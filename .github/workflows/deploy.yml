@@ -242,6 +242,9 @@ jobs:
           echo "Resolved deployment URL: ${URL}"
           echo "url=${URL}" >> $GITHUB_OUTPUT
 
+      - name: Install Chrome for Puppeteer
+        run: npx puppeteer browsers install chrome
+
       - name: Run SEO Render
         if: success()
         env:
