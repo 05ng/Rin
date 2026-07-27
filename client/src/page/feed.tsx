@@ -6,6 +6,7 @@ import ReactModal from "react-modal";
 import Popup from "reactjs-popup";
 import { Link, useLocation } from "wouter";
 import { useAlert, useConfirm } from "../components/dialog";
+import { ArticleVectorBadge } from "../components/feed_card";
 import { HashTag } from "../components/hashtag";
 import { Waiting } from "../components/loading";
 import { Markdown } from "../components/markdown";
@@ -262,6 +263,7 @@ export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?
                       </h1>
                       <div className="flex-1 w-0" />
                     </div>
+                    <ArticleVectorBadge vectorized={feed.vectorized} />
                     <nav className="mt-3 flex flex-wrap items-center gap-2" aria-label={t("article.translation_switch")}>
                       <span className="rounded-full bg-theme px-3 py-1 text-xs font-medium text-white">
                         {t(`article.language.${feed.language || "en"}`)}

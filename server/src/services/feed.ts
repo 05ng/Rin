@@ -147,6 +147,36 @@ async function resolveTranslationGroup(
     return { group };
 }
 
+async function attachVectorizedStatus<T extends { id: number }>(db: DB, rows: T[]): Promise<Array<T & { vectorized: boolean }>> {
+    if (rows.length === 0) {
+        return rows.map((row) => ({ ...row, vectorized: false }));
+    }
+
+    const ids = Array.from(new Set(rows.map((row) => row.id).filter((id) => Number.isSafeInteger(id))));
+    if (ids.length === 0) {
+        return rows.map((row) => ({ ...row, vectorized: false }));
+    }
+
+    const states = await db.query.feedVectorIndexes.findMany({
+        where: inArray(feedVectorIndexes.feedId, ids),
+        columns: { feedId: true, chunkCount: true, status: true },
+    });
+    const vectorizedIds = new Set(states
+        .filter((state) => state.status === "completed" && state.chunkCount > 0)
+        .map((state) => state.feedId));
+
+    return rows.map((row) => ({ ...row, vectorized: vectorizedIds.has(row.id) }));
+}
+
+async function getFeedVectorized(db: DB, feedId: number) {
+    const state = await db.query.feedVectorIndexes.findFirst({
+        where: eq(feedVectorIndexes.feedId, feedId),
+        columns: { chunkCount: true, status: true },
+    });
+
+    return state?.status === "completed" && state.chunkCount > 0;
+}
+
 async function initWPModules() {
     if (!XMLParser) {
         const fxp = await import("fast-xml-parser");
@@ -192,7 +222,9 @@ export function FeedService(): Hono<{
         const cached = await profileAsync(c, 'feed_list_cache_get', () => cache.get(cacheKey));
 
         if (cached) {
-            return c.json(cached);
+            const cachedData = cached as any;
+            const dataWithVectorStatus = await profileAsync(c, 'feed_list_cached_vector_status', () => attachVectorizedStatus(db, Array.isArray(cachedData.data) ? cachedData.data : []));
+            return c.json({ ...cachedData, data: dataWithVectorStatus });
         }
 
         const visibilityWhere = type === 'draft'
@@ -246,7 +278,8 @@ export function FeedService(): Hono<{
             await profileAsync(c, 'feed_list_cache_set', () => cache.set(cacheKey, data));
         }
 
-        return c.json(data);
+        const dataWithVectorStatus = await profileAsync(c, 'feed_list_vector_status', () => attachVectorizedStatus(db, data.data));
+        return c.json({ ...data, data: dataWithVectorStatus });
     });
 
     // GET /feed/translation-candidates - List articles eligible as a translation source
@@ -477,6 +510,7 @@ export function FeedService(): Hono<{
 
         const { hashtags, ...other } = feed;
         const hashtags_flatten = hashtags.map((f: any) => f.hashtag);
+        const vectorized = await profileAsync(c, 'feed_detail_vector_status', () => getFeedVectorized(db, feed.id));
 
         // update visits using HyperLogLog for efficient UV estimation
         const enableVisit = await profileAsync(c, 'feed_detail_counter_flag', () => clientConfig.getOrDefault('counter.enabled', true));
@@ -524,7 +558,7 @@ export function FeedService(): Hono<{
             await profileAsync(c, 'feed_detail_visit_insert', () => db.insert(visits).values({ feedId: feed.id, ip: ip }));
         }
 
-        return c.json({ ...other, hashtags: hashtags_flatten, translations, pv, uv });
+        return c.json({ ...other, hashtags: hashtags_flatten, translations, pv, uv, vectorized });
     });
 
     // GET /feed/adjacent/:id
@@ -1016,15 +1050,16 @@ export function SearchService(): Hono<{
             seen.add(feed.id);
             return true;
         });
+        const feedsWithVectorStatus = await profileAsync(c, 'feed_search_vector_status', () => attachVectorizedStatus(db, feed_list));
 
-        if (feed_list.length <= page_num * limit_num) {
-            return c.json({ size: feed_list.length, data: [], hasNext: false });
-        } else if (feed_list.length <= page_num * limit_num + limit_num) {
-            return c.json({ size: feed_list.length, data: feed_list.slice(page_num * limit_num), hasNext: false });
+        if (feedsWithVectorStatus.length <= page_num * limit_num) {
+            return c.json({ size: feedsWithVectorStatus.length, data: [], hasNext: false });
+        } else if (feedsWithVectorStatus.length <= page_num * limit_num + limit_num) {
+            return c.json({ size: feedsWithVectorStatus.length, data: feedsWithVectorStatus.slice(page_num * limit_num), hasNext: false });
         } else {
             return c.json({
-                size: feed_list.length,
-                data: feed_list.slice(page_num * limit_num, page_num * limit_num + limit_num),
+                size: feedsWithVectorStatus.length,
+                data: feedsWithVectorStatus.slice(page_num * limit_num, page_num * limit_num + limit_num),
                 hasNext: true
             });
         }

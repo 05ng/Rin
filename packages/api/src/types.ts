@@ -58,6 +58,7 @@ export interface Feed {
   };
   pv: number;
   uv: number;
+  vectorized: boolean;
   top?: number;
 }
 
@@ -80,6 +81,7 @@ export interface FeedListResponse {
     updatedAt: string;
     pv: number;
     uv: number;
+    vectorized: boolean;
   }>;
   hasNext: boolean;
 }

@@ -78,6 +78,8 @@
       "title$keyword": "搜索：{{keyword}}"
     },
     "title": "文章",
+    "vectorized": "已向量化",
+    "not_vectorized": "未向量化",
     "language": {
       "label": "文章语言",
       "all": "全部语言",

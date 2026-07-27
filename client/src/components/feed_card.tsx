@@ -11,6 +11,29 @@ import { type FeedCardVariant, normalizeFeedCardVariant } from "./feed-card-opti
 import { useSiteConfig } from "../hooks/useSiteConfig";
 import { articlePath } from "../utils/article-url";
 
+type ArticleVectorBadgeProps = {
+    vectorized?: boolean;
+    className?: string;
+};
+
+export function ArticleVectorBadge({ vectorized = false, className = "" }: ArticleVectorBadgeProps) {
+    const { t } = useTranslation();
+    const label = vectorized ? t("article.vectorized") : t("article.not_vectorized");
+    const badgeClass = [
+        "mt-1 inline-flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-bold leading-none",
+        vectorized
+            ? "border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300"
+            : "border-neutral-200 bg-neutral-50 text-neutral-400 dark:border-neutral-800 dark:bg-neutral-900/60 dark:text-neutral-500",
+        className,
+    ].join(" ");
+
+    return (
+        <span title={label} aria-label={label} className={badgeClass}>
+            V
+        </span>
+    );
+}
+
 function FeedCardImage({ src, variant }: { src: string; variant: FeedCardVariant }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const { src: cleanSrc, blurhash, width, height } = parseImageUrlMetadata(src);
@@ -94,6 +117,7 @@ export type FeedCardProps = {
     top?: number;
     language?: ArticleLanguage;
     title: string;
+    vectorized?: boolean;
     summary: string;
     hashtags?: { id: number, name: string }[];
     createdAt: Date;
@@ -102,7 +126,7 @@ export type FeedCardProps = {
     variant?: FeedCardVariant;
 };
 
-export function FeedCard({ id, alias, title, avatar, draft, listed, top, language, summary, hashtags, createdAt, updatedAt, preview = false, variant }: FeedCardProps) {
+export function FeedCard({ id, alias, title, avatar, draft, listed, top, language, summary, hashtags, createdAt, updatedAt, vectorized, preview = false, variant }: FeedCardProps) {
     const { t } = useTranslation();
     const siteConfig = useSiteConfig();
     const safeHashtags = Array.isArray(hashtags) ? hashtags : [];
@@ -117,6 +141,7 @@ export function FeedCard({ id, alias, title, avatar, draft, listed, top, languag
             ) : null}
             <div className={activeVariant === "editorial" ? "px-2 pb-2" : ""}>
                 <h1 className={styles.title}>{title}</h1>
+                <ArticleVectorBadge vectorized={vectorized} />
                 <p className={`space-x-2 ${styles.meta}`}>
                     <span title={new Date(createdAt).toLocaleString()}>
                         {createdAt === updatedAt ? timeago(createdAt) : t('feed_card.published$time', { time: timeago(createdAt) })}
