@@ -147,13 +147,13 @@ export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?
             href={new URL(articlePath(feed.id, feed.alias, feed.language), window.location.origin).toString()}
           />
           <title>{`${feed.title ?? "Unnamed"} - ${siteConfig.name}`}</title>
-          <meta property="og:site_name" content={siteName} />
+          <meta property="og:site_name" content={siteConfig.name} />
           <meta property="og:title" content={feed.title ?? ""} />
           <meta property="og:image" content={headImage ?? siteConfig.avatar} />
           <meta property="og:type" content="article" />
           <meta property="og:url" content={new URL(articlePath(feed.id, feed.alias, feed.language), window.location.origin).toString()} />
           <meta
-            name="og:description"
+            property="og:description"
             content={
               feed.content.length > 200
                 ? feed.content.substring(0, 200)

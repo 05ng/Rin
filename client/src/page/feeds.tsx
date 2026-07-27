@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet-async'
 import { Link, useSearch } from "wouter"
 import { FeedCard } from "../components/feed_card"
 import { Waiting } from "../components/loading"
+import { SiteMeta } from "../components/site-meta"
 import { client } from "../app/runtime"
 import { ProfileContext } from "../state/profile"
 
@@ -79,15 +80,7 @@ export function FeedsPage() {
         ref.current = key
     }, [language, limit, query.get("page"), query.get("type")])
     return (
-        <>
-            <Helmet>
-                <title>{`${t('article.title')} - ${siteConfig.name}`}</title>
-                <meta property="og:site_name" content={siteName} />
-                <meta property="og:title" content={t('article.title')} />
-                <meta property="og:image" content={siteConfig.avatar} />
-                <meta property="og:type" content="article" />
-                <meta property="og:url" content={document.URL} />
-            </Helmet>
+        <SiteMeta title={t('article.title')} type="website">
             <Waiting for={feeds.draft.size + feeds.normal.size + feeds.unlisted.size > 0 || status === 'idle'}>
                 <main className="w-full flex flex-col justify-center items-center mb-8">
                     <div className="wauto text-start text-black dark:text-white py-4 text-4xl font-bold">
@@ -134,6 +127,6 @@ export function FeedsPage() {
                     </Waiting>
                 </main>
             </Waiting>
-        </>
+        </SiteMeta>
     )
 }
