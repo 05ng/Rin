@@ -4,6 +4,8 @@ import {
   buildWranglerObservabilityConfig,
   buildWranglerQueueConfig,
   buildWranglerTriggersConfig,
+  buildWranglerVectorizeConfig,
+  buildWranglerWorkflowConfig,
   collectWorkerSecrets,
 } from "./deploy-cf";
 
@@ -24,7 +26,6 @@ describe("collectWorkerSecrets", () => {
     });
 
     expect(secrets).toEqual({
-      CLOUDFLARE_API_TOKEN: "cf-token",
       CLOUDFLARE_ACCOUNT_ID: "cf-account",
       JWT_SECRET: "jwt-secret",
       ADMIN_USERNAME: "admin",
@@ -103,5 +104,26 @@ describe("buildWranglerObservabilityConfig", () => {
 
   it("omits observability overrides for production deploys", () => {
     expect(buildWranglerObservabilityConfig(false)).toBe("");
+  });
+});
+
+
+describe("buildWranglerVectorizeConfig", () => {
+  it("binds the article Vectorize index", () => {
+    const config = buildWranglerVectorizeConfig("rin-server-articles");
+
+    expect(config).toContain('binding = "ARTICLE_VECTORIZE"');
+    expect(config).toContain('index_name = "rin-server-articles"');
+  });
+});
+
+describe("buildWranglerWorkflowConfig", () => {
+  it("includes SEO and article vectorization workflows", () => {
+    const config = buildWranglerWorkflowConfig();
+
+    expect(config).toContain('binding = "SEO_WORKFLOW"');
+    expect(config).toContain('class_name = "SEORenderWorkflow"');
+    expect(config).toContain('binding = "ARTICLE_VECTORIZE_WORKFLOW"');
+    expect(config).toContain('class_name = "ArticleVectorizeWorkflow"');
   });
 });

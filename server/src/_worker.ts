@@ -28,4 +28,5 @@ export default {
     },
 }
 
+export { ArticleVectorizeWorkflow } from "./runtime/article-vectorize-workflow";
 export { SEORenderWorkflow } from "./runtime/seo-workflow";

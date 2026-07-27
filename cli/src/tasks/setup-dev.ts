@@ -36,6 +36,7 @@ export async function runSetupDev() {
     process.exit(1);
   }
 
+  const vectorizeIndexName = env.ARTICLE_VECTORIZE_INDEX_NAME || `${env.WORKER_NAME || "rin-server"}-articles`;
   const wranglerContent = `#:schema node_modules/wrangler/config-schema.json
 name = "${env.WORKER_NAME || "rin-server"}"
 main = "server/src/_worker.ts"
@@ -80,6 +81,23 @@ max_batch_size = 1
 max_batch_timeout = 5
 [ai]
 binding = "AI"
+
+[[vectorize]]
+binding = "ARTICLE_VECTORIZE"
+index_name = "${vectorizeIndexName}"
+
+[browser]
+binding = "BROWSER"
+
+[[workflows]]
+name = "seo-render-workflow"
+binding = "SEO_WORKFLOW"
+class_name = "SEORenderWorkflow"
+
+[[workflows]]
+name = "article-vectorize-workflow"
+binding = "ARTICLE_VECTORIZE_WORKFLOW"
+class_name = "ArticleVectorizeWorkflow"
 ${env.R2_BUCKET_NAME
   ? `
 

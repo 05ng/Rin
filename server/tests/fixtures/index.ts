@@ -85,6 +85,17 @@ export function createMockDB() {
             FOREIGN KEY (feed_id) REFERENCES feeds(id) ON DELETE CASCADE
         );
 
+        -- Feed vector index state table
+        CREATE TABLE IF NOT EXISTS feed_vector_indexes (
+            feed_id INTEGER PRIMARY KEY NOT NULL,
+            content_hash TEXT DEFAULT '' NOT NULL,
+            chunk_count INTEGER DEFAULT 0 NOT NULL,
+            status TEXT DEFAULT 'idle' NOT NULL,
+            error TEXT DEFAULT '' NOT NULL,
+            updated_at INTEGER DEFAULT (unixepoch()) NOT NULL,
+            FOREIGN KEY (feed_id) REFERENCES feeds(id) ON DELETE CASCADE
+        );
+
         -- Info table
         CREATE TABLE IF NOT EXISTS info (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

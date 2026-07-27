@@ -1,12 +1,17 @@
-import { and, asc, count, desc, eq, gt, like, lt, ne, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, like, lt, ne, or } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { Hono } from "hono";
 import type { DB, Variables } from "../core/hono-types";
 import { profileAsync } from "../core/server-timing";
-import { feeds, visits, visitStats } from "../db/schema";
+import { feedVectorIndexes, feeds, visits, visitStats } from "../db/schema";
 import { HyperLogLog } from "../utils/hyperloglog";
 import { extractImageWithMetadata } from "../utils/image";
 import { stripMarkdown } from "../utils/markdown";
+import {
+    ARTICLE_EMBEDDING_MODEL,
+    extractEmbeddingVectors,
+    isWorkersAIRateLimitError,
+} from "../runtime/article-vectorize";
 import { syncFeedAISummaryQueueState } from "./feed-ai-summary";
 import { bindTagToPost } from "./tag";
 import { clearFeedCache } from "./clear-feed-cache";
@@ -41,6 +46,19 @@ function parseArticleLanguage(value: unknown): ArticleLanguage | null {
 function articlePath(id: number, alias: string | null, language: ArticleLanguage | string) {
     const path = alias ? `/${encodeURIComponent(alias)}` : `/feed/${id}`;
     return language === "en" ? path : `/${language}${path}`;
+}
+
+function queueArticleVectorizeWorkflow(c: any, feedId: number, options: { isDelete?: boolean; chunkCount?: number } = {}) {
+    const env = c.get('env');
+    if (!env.ARTICLE_VECTORIZE_WORKFLOW) {
+        return;
+    }
+
+    c.executionCtx.waitUntil(
+        env.ARTICLE_VECTORIZE_WORKFLOW.create({
+            params: { feedId, isDelete: options.isDelete, chunkCount: options.chunkCount },
+        }).catch(console.error),
+    );
 }
 
 function parseTranslationOf(value: unknown): number | null | undefined {
@@ -346,7 +364,12 @@ export function FeedService(): Hono<{
         await profileAsync(c, 'feed_create_cache_invalidate', async () => {
             await cache.deletePrefix('feeds_');
             await cache.deletePrefix('feed_');
+            await cache.deletePrefix('search_');
         });
+
+        if (!draft) {
+            queueArticleVectorizeWorkflow(c, result[0].insertedId);
+        }
 
         if (env.SEO_WORKFLOW && listed && !draft) {
             const baseUrl = new URL(c.req.url).origin;
@@ -674,7 +697,10 @@ export function FeedService(): Hono<{
         await profileAsync(c, 'feed_update_cache_invalidate', async () => {
             await clearFeedCache(cache, id_num, feed.alias, alias || null);
             await cache.deletePrefix('feed_');
+            await cache.deletePrefix('search_');
         });
+
+        queueArticleVectorizeWorkflow(c, id_num);
 
         if (env.SEO_WORKFLOW && isListed && !isDraft) {
             const baseUrl = new URL(c.req.url).origin;
@@ -745,11 +771,19 @@ export function FeedService(): Hono<{
             }
         }
 
+        const vectorIndexState = await profileAsync(c, 'feed_delete_vector_state_lookup', () => db.query.feedVectorIndexes.findFirst({
+            where: eq(feedVectorIndexes.feedId, id_num),
+            columns: { chunkCount: true },
+        }));
+
         await profileAsync(c, 'feed_delete_db', () => db.delete(feeds).where(eq(feeds.id, id_num)));
         await profileAsync(c, 'feed_delete_cache_invalidate', async () => {
             await clearFeedCache(cache, id_num, feed.alias, null);
             await cache.deletePrefix('feed_');
+            await cache.deletePrefix('search_');
         });
+
+        queueArticleVectorizeWorkflow(c, id_num, { isDelete: true, chunkCount: vectorIndexState?.chunkCount });
 
         const env = c.get('env');
         if (env.SEO_WORKFLOW) {
@@ -763,6 +797,101 @@ export function FeedService(): Hono<{
         return c.text('Deleted');
     });
     return app;
+}
+
+async function findSemanticFeedIds(env: Env, keyword: string, language: ArticleLanguage | null, topK: number) {
+    if (!env.AI || !env.ARTICLE_VECTORIZE) {
+        return [] as number[];
+    }
+
+    try {
+        const embeddings = extractEmbeddingVectors(await env.AI.run(ARTICLE_EMBEDDING_MODEL, { text: [keyword] }));
+        const queryVector = embeddings[0];
+        if (!queryVector) {
+            return [];
+        }
+
+        const result = await env.ARTICLE_VECTORIZE.query(queryVector, {
+            topK,
+            returnMetadata: "all",
+            filter: language ? { language } : undefined,
+        });
+
+        const ids = new Set<number>();
+        for (const match of result?.matches || []) {
+            const metadataFeedId = match.metadata?.feedId;
+            const parsedId = typeof metadataFeedId === "number"
+                ? metadataFeedId
+                : typeof metadataFeedId === "string"
+                    ? parseInt(metadataFeedId)
+                    : Number.NaN;
+
+            if (Number.isSafeInteger(parsedId) && parsedId > 0) {
+                ids.add(parsedId);
+            }
+        }
+
+        return Array.from(ids);
+    } catch (error) {
+        if (!isWorkersAIRateLimitError(error)) {
+            console.error("[Search] Vector search failed:", error);
+        }
+        return [];
+    }
+}
+
+function mapFeedSearchItem({ content, hashtags, summary, ...other }: any) {
+    const plainText = stripMarkdown(content);
+    return {
+        summary: summary.length > 0 ? summary : plainText.length > 100 ? plainText.slice(0, 100) : plainText,
+        hashtags: hashtags.map(({ hashtag }: any) => hashtag),
+        ...other
+    };
+}
+
+async function loadFeedsByIds(db: DB, ids: number[], admin: boolean, language: ArticleLanguage | null) {
+    if (ids.length === 0) {
+        return [] as any[];
+    }
+
+    let whereClause = inArray(feeds.id, ids) as any;
+    if (language) {
+        whereClause = and(whereClause, eq(feeds.language, language));
+    }
+    if (!admin) {
+        whereClause = and(whereClause, eq(feeds.draft, 0));
+    }
+
+    const rows = await db.query.feeds.findMany({
+        where: whereClause,
+        columns: admin ? undefined : { draft: false, listed: false },
+        with: {
+            hashtags: {
+                columns: {},
+                with: { hashtag: { columns: { id: true, name: true } } }
+            },
+            user: { columns: { id: true, username: true, avatar: true } }
+        },
+    });
+
+    const byId = new Map(rows.map((row: any) => [row.id, row]));
+    return ids.map((id) => byId.get(id)).filter(Boolean).map(mapFeedSearchItem);
+}
+
+function buildKeywordSearchWhere(keyword: string, language: ArticleLanguage | null) {
+    const searchKeyword = `%${keyword}%`;
+    let whereClause = or(
+        like(feeds.title, searchKeyword),
+        like(feeds.content, searchKeyword),
+        like(feeds.summary, searchKeyword),
+        like(feeds.alias, searchKeyword)
+    ) as any;
+
+    if (language) {
+        whereClause = and(whereClause, eq(feeds.language, language));
+    }
+
+    return whereClause;
 }
 
 export function SearchService(): Hono<{
@@ -779,35 +908,29 @@ export function SearchService(): Hono<{
         const db = c.get('db');
         const cache = c.get('cache');
         const admin = c.get('admin');
+        const env = c.get('env');
         const page = c.req.query('page');
         const limit = c.req.query('limit');
         let keyword = c.req.param('keyword');
 
-        keyword = decodeURI(keyword);
+        keyword = decodeURI(keyword).trim();
         const page_num = (page ? parseInt(page) > 0 ? parseInt(page) : 1 : 1) - 1;
         const limit_num = limit ? parseInt(limit) > 50 ? 50 : parseInt(limit) : 20;
 
-        if (keyword === undefined || keyword.trim().length === 0) {
+        if (keyword.length === 0) {
             return c.json({ size: 0, data: [], hasNext: false });
         }
 
         const languageQuery = c.req.query('language');
-        const language = languageQuery === undefined ? undefined : parseArticleLanguage(languageQuery);
+        const language = languageQuery === undefined ? null : parseArticleLanguage(languageQuery);
 
-        const cacheKey = language ? `search_${keyword}_${language}` : `search_${keyword}`;
-        const searchKeyword = `%${keyword}%`;
-        let whereClause = or(
-            like(feeds.title, searchKeyword),
-            like(feeds.content, searchKeyword),
-            like(feeds.summary, searchKeyword),
-            like(feeds.alias, searchKeyword)
-        ) as any;
+        const vectorTopK = Math.max(20, Math.min(50, (page_num + 1) * limit_num + 10));
+        const semanticFeedIds = await profileAsync(c, 'feed_search_vector', () => findSemanticFeedIds(env, keyword, language, vectorTopK));
+        const semanticFeeds = await profileAsync(c, 'feed_search_vector_db', () => loadFeedsByIds(db, semanticFeedIds, admin, language));
 
-        if (language) {
-            whereClause = and(whereClause, eq(feeds.language, language));
-        }
-
-        const feed_list = (await profileAsync(c, 'feed_search_cache_db', () => cache.getOrSet(cacheKey, () => db.query.feeds.findMany({
+        const cacheKey = `search_${admin ? "admin" : "public"}_${keyword}_${language || "all"}`;
+        const whereClause = buildKeywordSearchWhere(keyword, language);
+        const keywordFeeds = (await profileAsync(c, 'feed_search_cache_db', () => cache.getOrSet(cacheKey, () => db.query.feeds.findMany({
             where: admin ? whereClause : and(whereClause, eq(feeds.draft, 0)),
             columns: admin ? undefined : { draft: false, listed: false },
             with: {
@@ -818,13 +941,15 @@ export function SearchService(): Hono<{
                 user: { columns: { id: true, username: true, avatar: true } }
             },
             orderBy: [desc(feeds.createdAt), desc(feeds.updatedAt)],
-        })))).map(({ content, hashtags, summary, ...other }: any) => {
-            const plainText = stripMarkdown(content);
-            return {
-                summary: summary.length > 0 ? summary : plainText.length > 100 ? plainText.slice(0, 100) : plainText,
-                hashtags: hashtags.map(({ hashtag }: any) => hashtag),
-                ...other
-            };
+        })))).map(mapFeedSearchItem);
+
+        const seen = new Set<number>();
+        const feed_list = [...semanticFeeds, ...keywordFeeds].filter((feed: any) => {
+            if (seen.has(feed.id)) {
+                return false;
+            }
+            seen.add(feed.id);
+            return true;
         });
 
         if (feed_list.length <= page_num * limit_num) {

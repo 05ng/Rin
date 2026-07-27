@@ -21,6 +21,8 @@ declare namespace Cloudflare {
 		DB: D1Database;
 		ASSETS?: Fetcher;
 		AI: Ai;
+		ARTICLE_VECTORIZE?: VectorizeIndex;
+		ARTICLE_VECTORIZE_WORKFLOW?: Workflow;
 		S3_FOLDER: "images/";
 		S3_CACHE_FOLDER: "cache/";
 		S3_REGION: "auto";

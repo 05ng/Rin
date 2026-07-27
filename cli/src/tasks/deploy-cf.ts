@@ -15,7 +15,6 @@ function env(name: string, defaultValue?: string, required = false) {
 const renv = (name: string, defaultValue?: string) => env(name, defaultValue, true)!;
 
 const WORKER_SECRET_KEYS = [
-  "CLOUDFLARE_API_TOKEN",
   "CLOUDFLARE_ACCOUNT_ID",
   "JWT_SECRET",
   "ADMIN_USERNAME",
@@ -30,6 +29,10 @@ const WORKER_SECRET_KEYS = [
 ] as const;
 
 function isQueueAlreadyPresentError(stderr: string) {
+  return stderr.includes("already exists") || stderr.includes("already taken") || stderr.includes("[code: 11009]");
+}
+
+function isVectorizeAlreadyPresentError(stderr: string) {
   return stderr.includes("already exists") || stderr.includes("already taken") || stderr.includes("[code: 11009]");
 }
 
@@ -130,6 +133,31 @@ export function buildWranglerQueueConfig(taskQueueName: string, preview = false)
   `);
 }
 
+export function buildWranglerVectorizeConfig(indexName: string) {
+  return stripIndent(`
+    [[vectorize]]
+    binding = "ARTICLE_VECTORIZE"
+    index_name = "${indexName}"
+  `);
+}
+
+export function buildWranglerWorkflowConfig() {
+  return stripIndent(`
+    [browser]
+    binding = "BROWSER"
+
+    [[workflows]]
+    name = "seo-render-workflow"
+    binding = "SEO_WORKFLOW"
+    class_name = "SEORenderWorkflow"
+
+    [[workflows]]
+    name = "article-vectorize-workflow"
+    binding = "ARTICLE_VECTORIZE_WORKFLOW"
+    class_name = "ArticleVectorizeWorkflow"
+  `);
+}
+
 export function buildWranglerObservabilityConfig(preview = false) {
   if (!preview) {
     return "";
@@ -166,6 +194,7 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
   const dbName = renv("DB_NAME", "rin");
   const workerName = renv("WORKER_NAME", "rin-server");
   const taskQueueName = env("TASK_QUEUE_NAME", env("AI_SUMMARY_QUEUE_NAME", `${workerName}-tasks`)) ?? `${workerName}-tasks`;
+  const articleVectorizeIndexName = env("ARTICLE_VECTORIZE_INDEX_NAME", `${workerName}-articles`) ?? `${workerName}-articles`;
   const r2BucketName = env("R2_BUCKET_NAME", "");
   const s3Endpoint = env("S3_ENDPOINT", "");
   const s3AccessHost = env("S3_ACCESS_HOST", "");
@@ -263,6 +292,14 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
     process.exit(1);
   }
 
+  const vectorizeCreate = await $`${bunExec} x wrangler vectorize create ${articleVectorizeIndexName} --dimensions=768 --metric=cosine`.quiet().nothrow();
+  if (vectorizeCreate.exitCode !== 0 && !isVectorizeAlreadyPresentError(vectorizeCreate.stderr.toString())) {
+    console.error(`Failed to create Vectorize index "${articleVectorizeIndexName}"`);
+    console.error(stripIndent(vectorizeCreate.stdout.toString()));
+    console.error(stripIndent(vectorizeCreate.stderr.toString()));
+    process.exit(1);
+  }
+
   const listJson = (JSON.parse(await $`${bunExec} x wrangler d1 list --json`.quiet().text()) as Array<{ name: string; uuid: string }>).find(
     (item) => item.name === dbName,
   );
@@ -280,6 +317,8 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
     binding = "AI"
   `)} >> wrangler.toml`.quiet();
 
+  await $`echo ${buildWranglerVectorizeConfig(articleVectorizeIndexName)} >> wrangler.toml`.quiet();
+
   await $`echo ${buildWranglerQueueConfig(taskQueueName, preview)} >> wrangler.toml`.quiet();
 
   if (r2BucketName) {
@@ -292,15 +331,7 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
   }
 
   // Add Browser Rendering and Workflow bindings
-  await $`echo ${stripIndent(`
-    [browser]
-    binding = "BROWSER"
-
-    [[workflows]]
-    name = "seo-render-workflow"
-    binding = "SEO_WORKFLOW"
-    class_name = "SEORenderWorkflow"
-  `)} >> wrangler.toml`.quiet();
+  await $`echo ${buildWranglerWorkflowConfig()} >> wrangler.toml`.quiet();
 
   const migrationVersion = await getMigrationVersion("remote", dbName);
   const infoExists = await isInfoExist("remote", dbName);

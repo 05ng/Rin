@@ -48,6 +48,15 @@ export const visitStats = sqliteTable("visit_stats", {
     updatedAt: updated_at,
 });
 
+export const feedVectorIndexes = sqliteTable("feed_vector_indexes", {
+    feedId: integer("feed_id").references(() => feeds.id, { onDelete: 'cascade' }).notNull().primaryKey(),
+    contentHash: text("content_hash").default("").notNull(),
+    chunkCount: integer("chunk_count").default(0).notNull(),
+    status: text("status").default("idle").notNull(),
+    error: text("error").default("").notNull(),
+    updatedAt: updated_at,
+});
+
 export const info = sqliteTable("info", {
     key: text("key").notNull().unique(),
     value: text("value").notNull(),

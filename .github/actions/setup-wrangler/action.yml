@@ -53,5 +53,25 @@ runs:
         queue = "rin-tasks"
         max_batch_size = 1
         max_batch_timeout = 5
+
+        [ai]
+        binding = "AI"
+
+        [[vectorize]]
+        binding = "ARTICLE_VECTORIZE"
+        index_name = "rin-server-articles"
+
+        [browser]
+        binding = "BROWSER"
+
+        [[workflows]]
+        name = "seo-render-workflow"
+        binding = "SEO_WORKFLOW"
+        class_name = "SEORenderWorkflow"
+
+        [[workflows]]
+        name = "article-vectorize-workflow"
+        binding = "ARTICLE_VECTORIZE_WORKFLOW"
+        class_name = "ArticleVectorizeWorkflow"
         EOF
         echo "✅ Generated wrangler.toml for ${{ inputs.mode }}"
