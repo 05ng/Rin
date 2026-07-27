@@ -61,6 +61,11 @@ export class SEORenderWorkflow extends WorkflowEntrypoint<Env, SEORenderParams> 
           page.on('console', msg => debugLogs += `[Console] ${msg.type()}: ${msg.text()}\n`);
           page.on('pageerror', error => debugLogs += `[PageError]: ${error.message}\n`);
           page.on('requestfailed', request => debugLogs += `[RequestFailed]: ${request.url()} - ${request.failure()?.errorText}\n`);
+          page.on('response', response => {
+            if (response.status() === 403) {
+              debugLogs += `[Response 403]: ${response.url()}\n`;
+            }
+          });
           
           const response = await page.goto(fullUrl, { waitUntil: "networkidle2" });
           if (!response || !response.ok()) {
