@@ -63,8 +63,8 @@ export class SEORenderWorkflow extends WorkflowEntrypoint<Env, SEORenderParams> 
           }
 
           try {
-            // Wait for either the article content or the error container to appear
-            await page.waitForSelector("article, .wauto.rounded-2xl.bg-w", { timeout: 10000 });
+            // Wait for either the article content or the homepage main container to appear
+            await page.waitForSelector("article, main", { timeout: 10000 });
             // Add a small delay to allow any micro-animations or subsequent state updates to settle
             await new Promise(resolve => setTimeout(resolve, 500));
           } catch (e) {
