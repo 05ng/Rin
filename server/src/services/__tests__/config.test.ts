@@ -237,6 +237,127 @@ describe("ConfigService", () => {
         });
     });
 
+    describe("GET /cloudflare-usage - Cloudflare usage", () => {
+        it("should require authentication to read Cloudflare usage", async () => {
+            const res = await app.request("/cloudflare-usage", {
+                method: "GET",
+            });
+
+            expect(res.status).toBe(401);
+        });
+
+        it("should return configured products without Cloudflare API credentials", async () => {
+            const res = await app.request("/cloudflare-usage", {
+                method: "GET",
+                headers: {
+                    Authorization: "Bearer mock_token_1",
+                },
+            });
+
+            expect(res.status).toBe(200);
+            const data = await res.json() as {
+                credentialsConfigured: boolean;
+                products: Array<{ id: string; metrics: Array<{ used: number | null }> }>;
+            };
+            expect(data.credentialsConfigured).toBe(false);
+            expect(data.products.some((product) => product.id === "d1")).toBe(true);
+            expect(data.products.some((product) => product.id === "r2")).toBe(true);
+            expect(data.products.some((product) => product.id === "workers-ai")).toBe(true);
+        });
+
+        it("should map Cloudflare analytics into free tier metrics", async () => {
+            env.CLOUDFLARE_ACCOUNT_ID = "account-id" as any;
+            env.CLOUDFLARE_API_TOKEN = "api-token" as any;
+            env.CLOUDFLARE_D1_DATABASE_ID = "database-id" as any;
+            env.CLOUDFLARE_R2_BUCKET_NAME = "test-bucket" as any;
+            env.AI = { run: async () => ({ response: "ok" }) } as any;
+
+            globalThis.fetch = (async () => new Response(JSON.stringify({
+                data: {
+                    viewer: {
+                        accounts: [{
+                            d1AnalyticsAdaptiveGroups: [{
+                                sum: {
+                                    rowsRead: 1200,
+                                    rowsWritten: 30,
+                                    readQueries: 10,
+                                    writeQueries: 2,
+                                },
+                            }],
+                            r2OperationsAdaptiveGroups: [
+                                { sum: { requests: 7 }, dimensions: { actionType: "PutObject" } },
+                                { sum: { requests: 11 }, dimensions: { actionType: "GetObject" } },
+                            ],
+                            aiInferenceAdaptiveGroups: [
+                                { sum: { totalNeurons: 42 } },
+                            ],
+                        }],
+                    },
+                },
+            }), { status: 200, headers: { "Content-Type": "application/json" } })) as typeof fetch;
+
+            const res = await app.request("/cloudflare-usage", {
+                method: "GET",
+                headers: {
+                    Authorization: "Bearer mock_token_1",
+                },
+            });
+
+            expect(res.status).toBe(200);
+            const data = await res.json() as {
+                credentialsConfigured: boolean;
+                products: Array<{ id: string; metrics: Array<{ id: string; used: number | null }> }>;
+            };
+            expect(data.credentialsConfigured).toBe(true);
+            expect(data.products.find((product) => product.id === "d1")?.metrics.find((metric) => metric.id === "rows-read-written")?.used).toBe(1230);
+            expect(data.products.find((product) => product.id === "r2")?.metrics.find((metric) => metric.id === "class-a")?.used).toBe(7);
+            expect(data.products.find((product) => product.id === "r2")?.metrics.find((metric) => metric.id === "class-b")?.used).toBe(11);
+            expect(data.products.find((product) => product.id === "workers-ai")?.metrics.find((metric) => metric.id === "neurons")?.used).toBe(42);
+        });
+
+        it("should read Cloudflare credentials from server config when env vars are missing", async () => {
+            await app.request("/server", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: "Bearer mock_token_1",
+                },
+                body: JSON.stringify({
+                    CLOUDFLARE_ACCOUNT_ID: "stored-account-id",
+                    CLOUDFLARE_API_TOKEN: "stored-api-token",
+                }),
+            });
+
+            let authorizationHeader = "";
+            globalThis.fetch = (async (_url, init) => {
+                authorizationHeader = new Headers(init?.headers).get("Authorization") || "";
+                return new Response(JSON.stringify({
+                    data: {
+                        viewer: {
+                            accounts: [{
+                                d1AnalyticsAdaptiveGroups: [],
+                                r2OperationsAdaptiveGroups: [],
+                                aiInferenceAdaptiveGroups: [],
+                            }],
+                        },
+                    },
+                }), { status: 200, headers: { "Content-Type": "application/json" } });
+            }) as typeof fetch;
+
+            const res = await app.request("/cloudflare-usage", {
+                method: "GET",
+                headers: {
+                    Authorization: "Bearer mock_token_1",
+                },
+            });
+
+            expect(res.status).toBe(200);
+            expect(authorizationHeader).toBe("Bearer stored-api-token");
+            const data = await res.json() as { credentialsConfigured: boolean };
+            expect(data.credentialsConfigured).toBe(true);
+        });
+    });
+
     describe("Compatibility tasks", () => {
         it("should return compatibility task counts for admin", async () => {
             sqlite.exec(`

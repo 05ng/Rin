@@ -10,7 +10,8 @@
     "queue_status_description": "Inspect AI summary queue progress, recent task results, and failures.",
     "settings_description": "Manage site behavior, integrations, and publishing rules in one place.",
     "title": "Admin",
-    "writing_description": "Write, edit, and publish content from the private management workspace."
+    "writing_description": "Write, edit, and publish content from the private management workspace.",
+    "cloudflare_usage_description": "Monitor Cloudflare free tier usage for D1, R2, and Workers AI from the private admin workspace."
   },
   "compat_tasks": {
     "title": "Compatibility Tasks",
@@ -887,5 +888,37 @@
   "ai_translate": {
     "button": "AI Translate",
     "tooltip": "Automatically translate to Simplified Chinese using AI"
+  },
+  "cloudflare_usage": {
+    "title": "Cloudflare Usage",
+    "loading": "Loading Cloudflare usage...",
+    "load_failed": "Failed to load Cloudflare usage",
+    "generated_at": "Last updated: {{date}}",
+    "unavailable": "Unavailable",
+    "partial_title": "Cloudflare analytics is partially unavailable",
+    "partial_description": "The page can still show configured bindings and free tier limits, but live usage could not be fully loaded.",
+    "status": {
+      "success": "OK",
+      "warning": "Watch",
+      "danger": "Limit risk",
+      "unavailable": "Unavailable"
+    },
+    "period": {
+      "daily": "Daily free tier",
+      "monthly": "Monthly free tier",
+      "current": "Current usage"
+    },
+    "credentials": {
+      "ready": "Cloudflare API ready",
+      "missing": "Cloudflare API not configured",
+      "description": "Account ID: {{account}}. API token: {{token}}.",
+      "present": "present",
+      "absent": "missing"
+    },
+    "summary": {
+      "success": "Within free tier",
+      "watch": "Needs attention",
+      "danger": "At risk"
+    }
   }
 }

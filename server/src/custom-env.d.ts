@@ -2,6 +2,10 @@ import type { QueueTask } from "./queue";
 
 declare global {
   interface Env {
+    CLOUDFLARE_ACCOUNT_ID?: string;
+    CLOUDFLARE_API_TOKEN?: string;
+    CLOUDFLARE_D1_DATABASE_ID?: string;
+    CLOUDFLARE_R2_BUCKET_NAME?: string;
     RIN_GITHUB_CLIENT_ID?: string;
     RIN_GITHUB_CLIENT_SECRET?: string;
     RIN_GOOGLE_CLIENT_ID?: string;

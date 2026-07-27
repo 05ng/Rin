@@ -11,6 +11,7 @@ import { Tips, TipsPage } from "../components/tips";
 import useTableOfContents from "../hooks/useTableOfContents";
 import { useSiteConfig } from "../hooks/useSiteConfig";
 import { CallbackPage } from "../page/callback";
+import { CloudflareUsagePage } from "../page/cloudflare-usage";
 import { CompatTasksPage } from "../page/compat-tasks";
 import { ErrorPage } from "../page/error";
 import { FeedPage, TOCHeader } from "../page/feed";
@@ -84,6 +85,10 @@ export function AppRoutes() {
 
       <AdminRoute path="/admin/queue-status" requirePermission title={t("queue_status.title")} description={t("admin.queue_status_description")}>
         <QueueStatusPage />
+      </AdminRoute>
+
+      <AdminRoute path="/admin/cloudflare-usage" requirePermission title={t("cloudflare_usage.title")} description={t("admin.cloudflare_usage_description")}>
+        <CloudflareUsagePage />
       </AdminRoute>
 
       <AdminRoute path="/admin/compat-tasks" requirePermission title={t("compat_tasks.title")} description={t("admin.compat_tasks_description")}>

@@ -50,7 +50,7 @@ export const AI_CONFIG_KEYS = [
   `${AI_CONFIG_PREFIX}api_url`,
 ] as const;
 
-export const SENSITIVE_SERVER_CONFIG_FIELDS = [`${AI_CONFIG_PREFIX}api_key`] as const;
+export const SENSITIVE_SERVER_CONFIG_FIELDS = [`${AI_CONFIG_PREFIX}api_key`, "CLOUDFLARE_API_TOKEN"] as const;
 
 export const DEFAULT_AI_CONFIG: AIConfig = {
   enabled: false,

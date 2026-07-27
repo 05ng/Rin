@@ -96,6 +96,42 @@ export interface QueueTaskActionResponse {
   success: boolean;
 }
 
+export interface CloudflareUsageMetric {
+  id: string;
+  label: string;
+  description: string;
+  unit: string;
+  period: "daily" | "monthly" | "current";
+  used: number | null;
+  limit: number;
+  percentage: number | null;
+  status: "success" | "warning" | "danger" | "unavailable";
+}
+
+export interface CloudflareUsageProduct {
+  id: "d1" | "r2" | "workers-ai";
+  title: string;
+  status: "success" | "warning" | "danger" | "unavailable";
+  configured: boolean;
+  summary: string;
+  details: string[];
+  metrics: CloudflareUsageMetric[];
+}
+
+export interface CloudflareUsageResponse {
+  generatedAt: string;
+  credentialsConfigured: boolean;
+  accountConfigured: boolean;
+  tokenConfigured: boolean;
+  period: {
+    dayStart: string;
+    monthStart: string;
+    end: string;
+  };
+  products: CloudflareUsageProduct[];
+  errors: string[];
+}
+
 export interface CompatTasksResponse {
   generatedAt: string;
   aiSummary: {
@@ -510,6 +546,10 @@ class ConfigAPI {
   // GET /api/config/queue-status
   async getQueueStatus(): Promise<ApiResponse<QueueStatusResponse>> {
     return this.http.get<QueueStatusResponse>("/api/config/queue-status");
+  }
+
+  async getCloudflareUsage(): Promise<ApiResponse<CloudflareUsageResponse>> {
+    return this.http.get<CloudflareUsageResponse>("/api/config/cloudflare-usage");
   }
 
   async getCompatTasks(): Promise<ApiResponse<CompatTasksResponse>> {

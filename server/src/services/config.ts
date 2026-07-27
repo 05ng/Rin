@@ -14,6 +14,7 @@ import {
     splitConfigPayload,
 } from "./config-helpers";
 import { buildHealthCheckResponse } from "./config-health";
+import { buildCloudflareUsageResponse } from "./config-cloudflare-usage";
 import { buildQueueStatusResponse, deleteQueueStatusTask, retryQueueStatusTask } from "./config-queue-status";
 import { profileAsync } from "../core/server-timing";
 import {
@@ -182,6 +183,16 @@ export function ConfigService(): Hono {
         const env = c.get('env');
 
         return c.json(await wrapTime(c, 'queue_status', buildQueueStatusResponse(db, env)));
+    });
+
+    app.get('/cloudflare-usage', async (c: AppContext) => {
+        const admin = c.get('admin');
+
+        if (!admin) {
+            return c.text('Unauthorized', 401);
+        }
+
+        return c.json(await wrapTime(c, 'cloudflare_usage', buildCloudflareUsageResponse(c.get('env'), c.get('serverConfig'))));
     });
 
     app.get('/compat-tasks', async (c: AppContext) => {
