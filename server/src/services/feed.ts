@@ -494,7 +494,7 @@ export function FeedService(): Hono<{
 
         const feed = await profileAsync(c, 'feed_adjacent_current', () => db.query.feeds.findFirst({
             where: eq(feeds.id, id_num),
-            columns: { createdAt: true },
+            columns: { createdAt: true, language: true },
         }));
 
         if (!feed) {
@@ -502,6 +502,7 @@ export function FeedService(): Hono<{
         }
 
         const created_at = feed.createdAt;
+        const current_language = feed.language;
 
         function formatAndCacheData(feed: any, feedDirection: "previous_feed" | "next_feed") {
             if (feed) {
@@ -532,7 +533,7 @@ export function FeedService(): Hono<{
                 return previousFeedCached[0];
             } else {
                 const tempPreviousFeed = await profileAsync(c, 'feed_adjacent_prev_db', () => db.query.feeds.findFirst({
-                    where: and(and(eq(feeds.draft, 0), eq(feeds.listed, 1)), lt(feeds.createdAt, created_at)),
+                    where: and(and(eq(feeds.draft, 0), eq(feeds.listed, 1)), and(lt(feeds.createdAt, created_at), eq(feeds.language, current_language))),
                     orderBy: [desc(feeds.createdAt)],
                     with: {
                         hashtags: {
@@ -552,7 +553,7 @@ export function FeedService(): Hono<{
                 return nextFeedCached[0];
             } else {
                 const tempNextFeed = await profileAsync(c, 'feed_adjacent_next_db', () => db.query.feeds.findFirst({
-                    where: and(and(eq(feeds.draft, 0), eq(feeds.listed, 1)), gt(feeds.createdAt, created_at)),
+                    where: and(and(eq(feeds.draft, 0), eq(feeds.listed, 1)), and(gt(feeds.createdAt, created_at), eq(feeds.language, current_language))),
                     orderBy: [asc(feeds.createdAt)],
                     with: {
                         hashtags: {

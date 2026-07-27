@@ -329,7 +329,7 @@ export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?
                   </div>
                 </div>
               </article>
-              <AdjacentSection id={id} setError={setError} />
+              <AdjacentSection id={feed.id.toString()} setError={setError} />
               {feed && <Comments id={`${feed.id}`} />}
               <div className="h-16" />
             </main>
