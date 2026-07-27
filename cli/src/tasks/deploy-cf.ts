@@ -15,6 +15,8 @@ function env(name: string, defaultValue?: string, required = false) {
 const renv = (name: string, defaultValue?: string) => env(name, defaultValue, true)!;
 
 const WORKER_SECRET_KEYS = [
+  "CLOUDFLARE_API_TOKEN",
+  "CLOUDFLARE_ACCOUNT_ID",
   "JWT_SECRET",
   "ADMIN_USERNAME",
   "ADMIN_PASSWORD",

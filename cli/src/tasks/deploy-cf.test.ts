@@ -10,6 +10,8 @@ import {
 describe("collectWorkerSecrets", () => {
   it("includes supported non-empty worker secrets", () => {
     const secrets = collectWorkerSecrets({
+      CLOUDFLARE_API_TOKEN: "cf-token",
+      CLOUDFLARE_ACCOUNT_ID: "cf-account",
       JWT_SECRET: "jwt-secret",
       ADMIN_USERNAME: "admin",
       ADMIN_PASSWORD: "password",
@@ -22,6 +24,8 @@ describe("collectWorkerSecrets", () => {
     });
 
     expect(secrets).toEqual({
+      CLOUDFLARE_API_TOKEN: "cf-token",
+      CLOUDFLARE_ACCOUNT_ID: "cf-account",
       JWT_SECRET: "jwt-secret",
       ADMIN_USERNAME: "admin",
       ADMIN_PASSWORD: "password",
