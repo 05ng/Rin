@@ -32,8 +32,12 @@ function isQueueAlreadyPresentError(stderr: string) {
   return stderr.includes("already exists") || stderr.includes("already taken") || stderr.includes("[code: 11009]");
 }
 
-function isVectorizeAlreadyPresentError(stderr: string) {
-  return stderr.includes("already exists") || stderr.includes("already taken") || stderr.includes("[code: 11009]");
+export function isVectorizeAlreadyPresentError(stderr: string) {
+  return stderr.includes("already exists")
+    || stderr.includes("already taken")
+    || stderr.includes("[code: 11009]")
+    || stderr.includes("vectorize.index.duplicate_name")
+    || stderr.includes("[code: 3002]");
 }
 
 export function isVectorizePermissionError(output: string) {

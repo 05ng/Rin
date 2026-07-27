@@ -9,6 +9,7 @@ import {
   buildVectorizePermissionHint,
   collectWorkerSecrets,
   isVectorizePermissionError,
+  isVectorizeAlreadyPresentError,
 } from "./deploy-cf";
 
 describe("collectWorkerSecrets", () => {
@@ -120,6 +121,12 @@ describe("buildWranglerVectorizeConfig", () => {
 });
 
 describe("Vectorize deploy helpers", () => {
+  it("detects already-present Vectorize index errors from Wrangler output", () => {
+    expect(isVectorizeAlreadyPresentError('vectorize.index.duplicate_name - Index name "rin-server-articles" [code: 3002]')).toBe(true);
+    expect(isVectorizeAlreadyPresentError('already exists')).toBe(true);
+    expect(isVectorizeAlreadyPresentError('Authentication error [code: 10000]')).toBe(false);
+  });
+
   it("detects permission failures from Wrangler output", () => {
     expect(isVectorizePermissionError("Authentication error [code: 10000]")).toBe(true);
     expect(isVectorizePermissionError("Please ensure it has the correct permissions for this operation.")).toBe(true);
