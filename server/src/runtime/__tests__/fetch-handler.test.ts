@@ -102,6 +102,42 @@ describe("handleFetch", () => {
     expect(getAppFetch).toHaveBeenCalledTimes(0);
   });
 
+  it("normalizes stale prerendered SEO HTML before serving it", async () => {
+    getStorageObject.mockResolvedValue(new Response(
+      '<!doctype html><html lang="en"><head><title>Old</title><meta property="og:type" content="article"><meta property="og:site_name" content=""><meta name="og:description" content="desc"><link rel="canonical" href="https://agenticlife.org/en/lumina-tick"></head><body><a href="/en/lumina-tick">Read</a><p>Use <script> tags safely.</script></p></body></html>',
+      {
+        headers: {
+          "Content-Type": "text/html",
+        },
+      }
+    ));
+
+    const { handleFetch } = await import("../fetch-handler");
+
+    const response = await handleFetch(
+      new Request("https://agenticlife.org/en/lumina-tick", {
+        headers: {
+          "User-Agent": "Googlebot",
+        },
+      }),
+      {
+        S3_CACHE_FOLDER: "cache/",
+      } as unknown as Env,
+      {
+        waitUntil: () => {},
+        passThroughOnException: () => {},
+      } as unknown as ExecutionContext
+    );
+
+    const html = await response.text();
+    expect(html).toContain('<html lang="en">');
+    expect(html).toContain('property="og:site_name" content="Agentic Life"');
+    expect(html).toContain('property="og:description" content="desc"');
+    expect(html).toContain('href="https://agenticlife.org/lumina-tick"');
+    expect(html).toContain('href="/lumina-tick"');
+    expect(html).toContain("&lt;script> tags safely.&lt;/script>");
+  });
+
   it("serves static assets directly when the asset exists", async () => {
     getAppFetch.mockResolvedValue(new Response("app-body", { status: 200 }));
 

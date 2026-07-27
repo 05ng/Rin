@@ -24,6 +24,10 @@ import { parseImageUrlMetadata } from "../utils/image-upload";
 import { useImageLoadState } from "../utils/use-image-load-state";
 
 
+function escapeUnsafeScriptTags(content: string) {
+  return content.replace(/<\/?script\b/gi, (match) => match.replace("<", "&lt;"));
+}
+
 const countNewlinesBeforeNode = (text: string, offset: number) => {
   let newlinesBefore = 0;
   for (let i = offset - 1; i >= 0; i--) {
@@ -117,6 +121,7 @@ export function Markdown({ content }: { content: string }) {
   const colorMode = useColorMode();
   const [index, setIndex] = React.useState(-1);
   const slides = useRef<SlideImage[]>();
+  const safeContent = useMemo(() => escapeUnsafeScriptTags(content), [content]);
 
   useEffect(() => {
     slides.current = undefined;
@@ -128,12 +133,12 @@ export function Markdown({ content }: { content: string }) {
     <ReactMarkdown
       className="toc-content dark:text-neutral-300"
       remarkPlugins={[gfm, remarkMermaid, remarkMath, remarkAlert, remarkBreaks]}
-      children={content}
+      children={safeContent}
       rehypePlugins={[rehypeKatex, rehypeRaw]}
       components={{
         img({ node, src, ...props }) {
           const offset = node!.position!.start.offset!;
-          const previousContent = content.slice(0, offset);
+          const previousContent = safeContent.slice(0, offset);
           const newlinesBefore = countNewlinesBeforeNode(
             previousContent,
             offset
@@ -177,7 +182,7 @@ export function Markdown({ content }: { content: string }) {
           const { children, className, node, ...rest } = props;
           const match = /language-(\w+)/.exec(className || "");
 
-          const curContent = content.slice(node?.position?.start.offset || 0);
+          const curContent = safeContent.slice(node?.position?.start.offset || 0);
           const isCodeBlock = curContent.trimStart().startsWith("```");
 
           const codeBlockStyle = {
@@ -429,7 +434,7 @@ export function Markdown({ content }: { content: string }) {
           return <div {...props}>{children}</div>;
         },
       }}
-    />), [content])
+    />), [safeContent, colorMode])
 
 
 

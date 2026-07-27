@@ -31,10 +31,24 @@ function extractFirstMarkdownImageUrl(content: string) {
   return stripImageUrlMetadata(match[1]);
 }
 
+function plainTextExcerpt(content: string, maxLength = 200) {
+  const plainText = content
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/[`*_~>#-]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return plainText.length > maxLength ? plainText.slice(0, maxLength) : plainText;
+}
+
 export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?: string, TOC: () => JSX.Element, clean: (id: string) => void }) {
   const { t, i18n } = useTranslation();
   const language = i18n.resolvedLanguage;
   const siteConfig = useSiteConfig();
+  const siteName = siteConfig.name || "Agentic Life";
   const profile = useContext(ProfileContext);
   const [feed, setFeed] = useState<Feed>();
   const [error, setError] = useState<string>();
@@ -49,6 +63,16 @@ export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?
   const hasAISummary = Boolean(feed?.ai_summary?.trim());
   const showAISummaryState = feed?.ai_summary_status === "pending" || feed?.ai_summary_status === "processing" || feed?.ai_summary_status === "failed";
   const hashtags = Array.isArray(feed?.hashtags) ? feed.hashtags : [];
+  const canonicalUrl = feed
+    ? new URL(articlePath(feed.id, feed.alias, feed.language), window.location.origin).toString()
+    : "";
+  const description = feed ? plainTextExcerpt(feed.content) : "";
+  const alternateArticles = feed
+    ? [
+        { id: feed.id, alias: feed.alias, language: feed.language },
+        ...(feed.translations ?? []),
+      ]
+    : [];
   function deleteFeed() {
     // Confirm
     showConfirm(
@@ -140,24 +164,29 @@ export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?
   return (
     <Waiting for={feed || error}>
       {feed && (
-        <Helmet>
+        <Helmet htmlAttributes={{ lang: feed.language || "en" }}>
           <link
             rel="canonical"
-            href={new URL(articlePath(feed.id, feed.alias, feed.language), window.location.origin).toString()}
+            href={canonicalUrl}
           />
-          <title>{`${feed.title ?? "Unnamed"} - ${siteConfig.name}`}</title>
-          <meta property="og:site_name" content={siteConfig.name} />
+          {alternateArticles.map((article) => (
+            <link
+              key={article.language}
+              rel="alternate"
+              hrefLang={article.language}
+              href={new URL(articlePath(article.id, article.alias, article.language), window.location.origin).toString()}
+            />
+          ))}
+          <link rel="alternate" hrefLang="x-default" href={canonicalUrl} />
+          <title>{`${feed.title ?? "Unnamed"} - ${siteName}`}</title>
+          <meta property="og:site_name" content={siteName} />
           <meta property="og:title" content={feed.title ?? ""} />
           <meta property="og:image" content={headImage ?? siteConfig.avatar} />
           <meta property="og:type" content="article" />
-          <meta property="og:url" content={new URL(articlePath(feed.id, feed.alias, feed.language), window.location.origin).toString()} />
+          <meta property="og:url" content={canonicalUrl} />
           <meta
             property="og:description"
-            content={
-              feed.content.length > 200
-                ? feed.content.substring(0, 200)
-                : feed.content
-            }
+            content={description}
           />
           <meta name="author" content={feed.user.username} />
           <meta
@@ -166,11 +195,7 @@ export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?
           />
           <meta
             name="description"
-            content={
-              feed.content.length > 200
-                ? feed.content.substring(0, 200)
-                : feed.content
-            }
+            content={description}
           />
         </Helmet>
       )}

@@ -18,12 +18,14 @@ export function SiteMeta({ title, description, image, type = "website", children
     const { i18n } = useTranslation();
     const [location] = useLocation();
 
+    const siteName = siteConfig.name || "Agentic Life";
     const pageTitle = title 
-        ? `${title} - ${siteConfig.name}` 
-        : siteConfig.name;
+        ? `${title} - ${siteName}` 
+        : siteName;
 
-    const pageDescription = description || siteConfig.description;
+    const pageDescription = description || siteConfig.description || "A lightweight personal blogging system";
     const pageImage = stripImageUrlMetadata(image || siteConfig.avatar);
+    const documentLanguage = i18n.resolvedLanguage || i18n.language || 'en';
     
     // Attempt to construct canonical URL
     const canonicalUrl = typeof window !== 'undefined' 
@@ -32,7 +34,7 @@ export function SiteMeta({ title, description, image, type = "website", children
 
     return (
         <>
-            <Helmet htmlAttributes={{ lang: i18n.language || 'en' }}>
+            <Helmet htmlAttributes={{ lang: documentLanguage }}>
                 <title>{pageTitle}</title>
                 <meta name="description" content={pageDescription} />
                 <link rel="canonical" href={canonicalUrl} />
@@ -42,7 +44,7 @@ export function SiteMeta({ title, description, image, type = "website", children
                 <meta property="og:description" content={pageDescription} />
                 <meta property="og:type" content={type} />
                 <meta property="og:url" content={canonicalUrl} />
-                <meta property="og:site_name" content={siteConfig.name} />
+                <meta property="og:site_name" content={siteName} />
                 {pageImage && <meta property="og:image" content={pageImage} />}
 
                 {/* Twitter */}
