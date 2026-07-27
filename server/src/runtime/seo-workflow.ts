@@ -64,6 +64,15 @@ export class SEORenderWorkflow extends WorkflowEntrypoint<Env, SEORenderParams> 
             return;
           }
 
+          try {
+            // Wait for either the article content or the error container to appear
+            await page.waitForSelector("article, .wauto.rounded-2xl.bg-w", { timeout: 10000 });
+            // Add a small delay to allow any micro-animations or subsequent state updates to settle
+            await new Promise(resolve => setTimeout(resolve, 500));
+          } catch (e) {
+            console.warn(`[SEO Workflow] Timeout waiting for content to render on ${fullUrl}`);
+          }
+
           const html = await page.content();
           
           await this.env.R2_BUCKET!.put(key, html, {
