@@ -345,7 +345,7 @@ export function FeedService(): Hono<{
 
         if (env.SEO_WORKFLOW && listed && !draft) {
             const baseUrl = new URL(c.req.url).origin;
-            const urlPath = alias ? `/${alias}` : `/feed/${result[0].insertedId}`;
+            const urlPath = alias ? `/${language}/${alias}` : `/${language}/feed/${result[0].insertedId}`;
             c.executionCtx.waitUntil(
                 env.SEO_WORKFLOW.create({ params: { feedId: result[0].insertedId, urlPath, baseUrl } }).catch(console.error)
             );
@@ -672,7 +672,7 @@ export function FeedService(): Hono<{
 
         if (env.SEO_WORKFLOW && isListed && !isDraft) {
             const baseUrl = new URL(c.req.url).origin;
-            const urlPath = alias ? `/${alias}` : (feed.alias ? `/${feed.alias}` : `/feed/${id_num}`);
+            const urlPath = alias ? `/${language}/${alias}` : (feed.alias ? `/${language}/${feed.alias}` : `/${language}/feed/${id_num}`);
             c.executionCtx.waitUntil(
                 env.SEO_WORKFLOW.create({ params: { feedId: id_num, urlPath, baseUrl } }).catch(console.error)
             );
@@ -748,7 +748,7 @@ export function FeedService(): Hono<{
         const env = c.get('env');
         if (env.SEO_WORKFLOW) {
             const baseUrl = new URL(c.req.url).origin;
-            const urlPath = feed.alias ? `/${feed.alias}` : `/feed/${id_num}`;
+            const urlPath = feed.alias ? `/${feed.language}/${feed.alias}` : `/${feed.language}/feed/${id_num}`;
             c.executionCtx.waitUntil(
                 env.SEO_WORKFLOW.create({ params: { feedId: id_num, urlPath, baseUrl, isDelete: true } }).catch(console.error)
             );

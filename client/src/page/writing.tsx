@@ -67,7 +67,7 @@ async function publish({
   if (data) {
     showAlert(t("publish.success"), () => {
       Cache.with().clear();
-      window.location.href = articlePath(data.insertedId, alias);
+      window.location.href = articlePath(data.insertedId, alias, language);
     });
   }
 }
@@ -125,7 +125,7 @@ async function update({
   } else {
     showAlert(t("update.success"), () => {
       Cache.with(id).clear();
-      window.location.href = articlePath(id, alias);
+      window.location.href = articlePath(id, alias, language);
     });
   }
 }

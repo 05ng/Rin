@@ -1,3 +1,4 @@
-export function articlePath(id: number | string, alias?: string | null): string {
-  return alias ? `/${encodeURIComponent(alias)}` : `/feed/${id}`;
+export function articlePath(id: number | string, alias?: string | null, language?: string): string {
+  const path = alias ? `/${encodeURIComponent(alias)}` : `/feed/${id}`;
+  return language ? `/${language}${path}` : path;
 }

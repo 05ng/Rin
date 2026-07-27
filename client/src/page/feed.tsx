@@ -32,7 +32,7 @@ function extractFirstMarkdownImageUrl(content: string) {
   return stripImageUrlMetadata(match[1]);
 }
 
-export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Element, clean: (id: string) => void }) {
+export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?: string, TOC: () => JSX.Element, clean: (id: string) => void }) {
   const { t, i18n } = useTranslation();
   const language = i18n.resolvedLanguage;
   const siteConfig = useSiteConfig();
@@ -95,8 +95,12 @@ export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Elemen
     setFeed(undefined);
     setError(undefined);
     setHeadImage(undefined);
+    const targetLanguage = routeLang || language;
+    if (routeLang && routeLang !== language) {
+      i18n.changeLanguage(routeLang);
+    }
     client.feed
-      .get(id, language)
+      .get(id, targetLanguage)
       .then(({ data, error }) => {
         if (error) {
           setError(error.value as string);
@@ -112,8 +116,8 @@ export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Elemen
           }, 0);
         }
       });
-    ref.current = `${id}_${language}`;
-  }, [id, language]);
+    ref.current = `${id}_${routeLang || language}`;
+  }, [id, language, routeLang, i18n]);
   useEffect(() => {
     mermaid.initialize({
       startOnLoad: false,
@@ -140,14 +144,14 @@ export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Elemen
         <Helmet>
           <link
             rel="canonical"
-            href={new URL(articlePath(feed.id, feed.alias), window.location.origin).toString()}
+            href={new URL(articlePath(feed.id, feed.alias, feed.language), window.location.origin).toString()}
           />
           <title>{`${feed.title ?? "Unnamed"} - ${siteConfig.name}`}</title>
           <meta property="og:site_name" content={siteName} />
           <meta property="og:title" content={feed.title ?? ""} />
           <meta property="og:image" content={headImage ?? siteConfig.avatar} />
           <meta property="og:type" content="article" />
-          <meta property="og:url" content={new URL(articlePath(feed.id, feed.alias), window.location.origin).toString()} />
+          <meta property="og:url" content={new URL(articlePath(feed.id, feed.alias, feed.language), window.location.origin).toString()} />
           <meta
             name="og:description"
             content={
@@ -242,7 +246,7 @@ export function FeedPage({ id, TOC, clean }: { id: string, TOC: () => JSX.Elemen
                         <Link
                           key={translation.id}
                           onClick={() => i18n.changeLanguage(translation.language)}
-                          href={articlePath(translation.id, translation.alias)}
+                          href={articlePath(translation.id, translation.alias, translation.language)}
                           className="rounded-full bg-secondary px-3 py-1 text-xs font-medium text-neutral-700 transition-colors hover:bg-theme hover:text-white dark:text-neutral-200"
                         >
                           {t(`article.language.${translation.language}`)}

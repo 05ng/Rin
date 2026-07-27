@@ -13,6 +13,7 @@ interface FeedItem {
     alias: string | null;
     createdAt: Date;
     title: string | null;
+    language?: string;
 }
 
 export function TimelinePage() {
@@ -85,9 +86,9 @@ export function TimelinePage() {
                                     </span>
                             </h1>
                             <div className="w-full flex flex-col justify-center items-start my-4">
-                                {feeds[+year]?.map(({ id, alias, title, createdAt }) => (
+                                {feeds[+year]?.map(({ id, alias, title, createdAt, language }) => (
                                     <FeedItem key={id} id={id.toString()} alias={alias} title={title || t('unlisted')}
-                                              createdAt={new Date(createdAt)}/>
+                                              createdAt={new Date(createdAt)} language={language} />
                                 ))}
                             </div>
                         </div>
@@ -98,7 +99,7 @@ export function TimelinePage() {
     )
 }
 
-export function FeedItem({ id, alias, title, createdAt }: { id: string, alias: string | null, title: string, createdAt: Date }) {
+export function FeedItem({ id, alias, title, createdAt, language }: { id: string, alias: string | null, title: string, createdAt: Date, language?: string }) {
     const formatter = new Intl.DateTimeFormat('en-US', { day: '2-digit', month: '2-digit' });
     return (
         <div className="flex flex-row pl-8">
@@ -109,7 +110,7 @@ export function FeedItem({ id, alias, title, createdAt }: { id: string, alias: s
                 <span className="t-secondary text-sm" title={new Date(createdAt).toLocaleString()}>
                     {formatter.format(new Date(createdAt))}
                 </span>
-                <Link href={articlePath(id, alias)} target="_blank" className="text-base t-primary hover:text-theme text-pretty overflow-hidden">
+                <Link href={articlePath(id, alias, language)} target="_blank" className="text-base t-primary hover:text-theme text-pretty overflow-hidden">
                     {title}
                 </Link>
             </div>

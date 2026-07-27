@@ -145,5 +145,5 @@ export function FeedCard({ id, alias, title, avatar, draft, listed, top, languag
         </div>
     );
 
-    return preview ? body : <Link href={articlePath(id, alias)} target="_blank" className="block w-full">{body}</Link>;
+    return preview ? body : <Link href={articlePath(id, alias, language)} target="_blank" className="block w-full">{body}</Link>;
 }

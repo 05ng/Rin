@@ -157,8 +157,28 @@ export function AppRoutes() {
         {(params, toc, cleanup) => <FeedPage id={params.id || ""} TOC={toc} clean={cleanup} />}
       </TocRoute>
 
+      <TocRoute path="/:lang/feed/:id">
+        {(params, toc, cleanup) => {
+          const lang = params.lang || "";
+          if (lang === "en" || lang === "zh-CN") {
+            return <FeedPage id={params.id || ""} routeLang={lang} TOC={toc} clean={cleanup} />;
+          }
+          return <ErrorPage error={t("error.not_found")} />;
+        }}
+      </TocRoute>
+
       <TocRoute path="/:alias">
         {(params, toc, cleanup) => <FeedPage id={params.alias || ""} TOC={toc} clean={cleanup} />}
+      </TocRoute>
+
+      <TocRoute path="/:lang/:alias">
+        {(params, toc, cleanup) => {
+          const lang = params.lang || "";
+          if (lang === "en" || lang === "zh-CN") {
+            return <FeedPage id={params.alias || ""} routeLang={lang} TOC={toc} clean={cleanup} />;
+          }
+          return <ErrorPage error={t("error.not_found")} />;
+        }}
       </TocRoute>
 
       <AppRoute path="/user/github">

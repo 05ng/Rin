@@ -138,6 +138,7 @@ export interface AdjacentFeed {
   hashtags: Array<{ id: number; name: string }>;
   createdAt: string;
   updatedAt: string;
+  language?: string;
 }
 
 export interface AdjacentFeedResponse {
