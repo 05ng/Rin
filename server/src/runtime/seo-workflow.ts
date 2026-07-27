@@ -40,7 +40,8 @@ export class SEORenderWorkflow extends WorkflowEntrypoint<Env, SEORenderParams> 
     }
 
     for (const path of pathsToRender) {
-      await step.do(`render-${path}`, async () => {
+      const stepName = path === "/" ? "render-home" : `render-${path.replace(/\//g, "-")}`;
+      await step.do(stepName, async () => {
         const fullUrl = `${baseUrl}${path}`;
         const folder = this.env.S3_CACHE_FOLDER || "cache/";
         let key = path === "/" ? path_join(folder, "index.html") : path_join(folder, path);
@@ -55,6 +56,11 @@ export class SEORenderWorkflow extends WorkflowEntrypoint<Env, SEORenderParams> 
           // Use standard user agent
           const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36";
           await page.setUserAgent(ua);
+          
+          let debugLogs = "";
+          page.on('console', msg => debugLogs += `[Console] ${msg.type()}: ${msg.text()}\n`);
+          page.on('pageerror', error => debugLogs += `[PageError]: ${error.message}\n`);
+          page.on('requestfailed', request => debugLogs += `[RequestFailed]: ${request.url()} - ${request.failure()?.errorText}\n`);
           
           const response = await page.goto(fullUrl, { waitUntil: "networkidle2" });
           if (!response || !response.ok()) {
@@ -76,6 +82,12 @@ export class SEORenderWorkflow extends WorkflowEntrypoint<Env, SEORenderParams> 
           await this.env.R2_BUCKET!.put(key, html, {
             httpMetadata: { contentType: "text/html" }
           });
+          
+          if (debugLogs) {
+             await this.env.R2_BUCKET!.put(key + ".log", debugLogs, {
+               httpMetadata: { contentType: "text/plain" }
+             });
+          }
           
           console.log(`[SEO Workflow] Successfully cached ${fullUrl}`);
         } catch (error) {
