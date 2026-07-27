@@ -9,6 +9,8 @@ declare global {
     TASK_QUEUE?: Queue<QueueTask>;
     R2_BUCKET?: R2Bucket;
     AI?: any;
+    BROWSER?: any; // Fetcher binding for Browser Rendering
+    SEO_WORKFLOW?: any; // Workflow binding
   }
 }
 

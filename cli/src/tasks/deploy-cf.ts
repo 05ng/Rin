@@ -267,6 +267,17 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
     `)} >> wrangler.toml`.quiet();
   }
 
+  // Add Browser Rendering and Workflow bindings
+  await $`echo ${stripIndent(`
+    [browser]
+    binding = "BROWSER"
+
+    [[workflows]]
+    name = "seo-render-workflow"
+    binding = "SEO_WORKFLOW"
+    class_name = "SEORenderWorkflow"
+  `)} >> wrangler.toml`.quiet();
+
   const migrationVersion = await getMigrationVersion("remote", dbName);
   const infoExists = await isInfoExist("remote", dbName);
   const files = await readdir("./server/sql", { recursive: false });

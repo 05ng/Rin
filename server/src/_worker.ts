@@ -26,3 +26,5 @@ export default {
         return handleQueue(batch, env, ctx);
     },
 }
+
+export { SEORenderWorkflow } from "./runtime/seo-workflow";

@@ -396,6 +396,12 @@ export function FeedService(): Hono<{
             await cache.deletePrefix('feed_');
         });
 
+        if (env.SEO_WORKFLOW && listed && !draft) {
+            const baseUrl = new URL(c.req.url).origin;
+            const urlPath = alias ? `/${alias}` : `/feed/${result[0].insertedId}`;
+            env.SEO_WORKFLOW.create({ params: { feedId: result[0].insertedId, urlPath, baseUrl } }).catch(console.error);
+        }
+
         if (result.length === 0) {
             return c.text('Failed to insert', 500);
         } else {
@@ -713,6 +719,13 @@ export function FeedService(): Hono<{
             await clearFeedCache(cache, id_num, feed.alias, alias || null);
             await cache.deletePrefix('feed_');
         });
+
+        if (env.SEO_WORKFLOW && (listed || feed.listed) && (!draft || feed.draft === 0)) {
+            const baseUrl = new URL(c.req.url).origin;
+            const urlPath = alias ? `/${alias}` : (feed.alias ? `/${feed.alias}` : `/feed/${id_num}`);
+            env.SEO_WORKFLOW.create({ params: { feedId: id_num, urlPath, baseUrl } }).catch(console.error);
+        }
+
         return c.text('Updated');
     });
 
@@ -779,6 +792,14 @@ export function FeedService(): Hono<{
             await clearFeedCache(cache, id_num, feed.alias, null);
             await cache.deletePrefix('feed_');
         });
+
+        const env = c.get('env');
+        if (env.SEO_WORKFLOW) {
+            const baseUrl = new URL(c.req.url).origin;
+            const urlPath = feed.alias ? `/${feed.alias}` : `/feed/${id_num}`;
+            env.SEO_WORKFLOW.create({ params: { feedId: id_num, urlPath, baseUrl, isDelete: true } }).catch(console.error);
+        }
+
         return c.text('Deleted');
     });
     return app;

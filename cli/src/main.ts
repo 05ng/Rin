@@ -4,7 +4,7 @@ import { runDeployCommand } from "./commands/deploy";
 import { runDevCommand } from "./commands/dev";
 import { runReleaseCommand } from "./commands/release";
 import { runSetupDev } from "./tasks/setup-dev";
-import { runSeoRender } from "./tasks/seo-render";
+
 
 function printHelp() {
   console.log(`Rin CLI
@@ -16,7 +16,6 @@ Commands:
   db fix-top-field
   setup-dev
   release <version>
-  seo-render
 `);
 }
 
@@ -51,9 +50,6 @@ export async function runCli(rawArgs: string[]) {
       return;
     case "setup-dev":
       await runSetupDev();
-      return;
-    case "seo-render":
-      await runSeoRender();
       return;
     default:
       logger.error(`Unknown command: ${command}`);

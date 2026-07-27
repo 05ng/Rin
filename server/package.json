@@ -27,6 +27,7 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
+    "@cloudflare/puppeteer": "^1.1.0",
     "@rin/api": "workspace:*",
     "@rin/config": "workspace:*",
     "arctic": "^3.7.0",
