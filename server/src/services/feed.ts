@@ -7,7 +7,6 @@ import { feeds, visits, visitStats } from "../db/schema";
 import { HyperLogLog } from "../utils/hyperloglog";
 import { extractImageWithMetadata } from "../utils/image";
 import { stripMarkdown } from "../utils/markdown";
-import { generateAITranslationResult } from "../utils/ai";
 import { syncFeedAISummaryQueueState } from "./feed-ai-summary";
 import { bindTagToPost } from "./tag";
 import { clearFeedCache } from "./clear-feed-cache";

@@ -150,7 +150,7 @@ export function WritingPage({ id }: { id?: number }) {
   );
   const [translationCandidates, setTranslationCandidates] = useState<TranslationCandidate[]>([]);
   const [publishing, setPublishing] = useState(false)
-
+  const { showAlert, AlertUI } = useAlert()
 
   function publishButton() {
     if (publishing) return;
