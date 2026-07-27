@@ -181,7 +181,7 @@ export async function runCloudflareDeploy(target: "all" | "server" | "client" = 
   const avatar = env("AVATAR", "");
   const pageSize = env("PAGE_SIZE", "5");
   const rssEnable = env("RSS_ENABLE", "false");
-  const canonicalHost = env("CANONICAL_HOST", "agenticlife.org");
+  const canonicalHost = env("CANONICAL_HOST") || "agenticlife.org";
 
   let finalS3Endpoint = s3Endpoint;
   let finalS3Bucket = s3Bucket;
