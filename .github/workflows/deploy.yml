@@ -254,7 +254,7 @@ jobs:
           S3_BUCKET: ${{ vars.S3_BUCKET || '' }}
           S3_CACHE_FOLDER: ${{ vars.S3_CACHE_FOLDER || 'cache/' }}
           S3_FORCE_PATH_STYLE: ${{ vars.S3_FORCE_PATH_STYLE || 'false' }}
-          CACHE_STORAGE_MODE: ${{ vars.CACHE_STORAGE_MODE || 'database' }}
+          CACHE_STORAGE_MODE: "s3"
         run: bun run scripts/seo-render.ts
 
       - name: Comment on PR

@@ -1,55 +1,37 @@
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import path from "node:path";
 import puppeteer from "puppeteer";
-import { getWranglerEnv } from "../lib/wrangler";
-
-const bunExec = process.execPath;
-const wranglerCwd = "server";
-
-async function runWranglerQuiet(args: string[]) {
-  const proc = Bun.spawn([bunExec, "x", "wrangler", ...args], {
-    cwd: wranglerCwd,
-    env: getWranglerEnv(),
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-
-  if (exitCode !== 0) {
-    throw new Error(stderr.trim() || stdout.trim() || `wrangler failed with exit code ${exitCode}`);
-  }
-}
 
 export async function runSeoRender() {
   const env = process.env;
   const baseUrl = env.SEO_BASE_URL || "";
   const containsKey = env.SEO_CONTAINS_KEY || "";
+  const region = env.S3_REGION;
+  const endpoint = env.S3_ENDPOINT;
+  const accessKeyId = env.S3_ACCESS_KEY_ID;
+  const secretAccessKey = env.S3_SECRET_ACCESS_KEY;
+  const accessHost = env.S3_ACCESS_HOST || endpoint;
+  const bucket = env.S3_BUCKET;
   const folder = env.S3_CACHE_FOLDER || "cache/";
+  const forcePathStyle = env.S3_FORCE_PATH_STYLE === "true";
 
-  if (!baseUrl) {
-    throw new Error("SEO_BASE_URL is not set");
+  if (!baseUrl || !region || !endpoint || !accessKeyId || !secretAccessKey || !bucket) {
+    throw new Error("SEO render env is incomplete");
   }
+
+  const s3 = new S3Client({
+    region,
+    endpoint,
+    forcePathStyle,
+    credentials: { accessKeyId, secretAccessKey },
+  });
 
   async function saveFile(filename: string, data: string) {
     const url = new URL(filename);
-    let key = path.join(folder, url.pathname + url.search.replace("?", "&"));
-    if (key.endsWith("/")) {
-      key += "index.html";
-    }
-    
-    await runWranglerQuiet([
-        "d1",
-        "execute",
-        "rin",
-        "--local",
-        "--command",
-        `INSERT OR REPLACE INTO rendered_pages (path, html) VALUES ('${key}', '${data.replace(/'/g, "''")}')`,
-    ]);
-
-    console.info(`Saved ${key} to database.`);
+    let fileName = path.join(folder, url.pathname + url.search.replace("?", "&"));
+    if (fileName.endsWith("/")) fileName += "index.html";
+    await s3.send(new PutObjectCommand({ Bucket: bucket, Key: fileName, Body: data, ContentType: "text/html" }));
+    console.info(`Saved ${accessHost}/${fileName}.`);
   }
 
   const fetchedLinks = new Set<string>();

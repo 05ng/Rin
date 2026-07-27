@@ -117,12 +117,6 @@ export const cache = sqliteTable("cache", {
     keyTypeUnique: unique().on(table.key, table.type),
 }));
 
-export const renderedPages = sqliteTable("rendered_pages", {
-    path: text("path").primaryKey(),
-    html: text("html").notNull(),
-    createdAt: integer("created_at", { mode: 'timestamp' }).default(sql`(unixepoch())`).notNull(),
-});
-
 export const feedsRelations = relations(feeds, ({ many, one }) => ({
     hashtags: many(feedHashtags),
     user: one(users, {
