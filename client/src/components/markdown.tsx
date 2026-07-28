@@ -9,7 +9,6 @@ import {
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
 import gfm from "remark-gfm";
-import remarkMermaid from "../remark/remarkMermaid";
 import { remarkAlert } from "remark-github-blockquote-alert";
 import remarkMath from "remark-math";
 import remarkBreaks from "remark-breaks";
@@ -132,7 +131,7 @@ export function Markdown({ content }: { content: string }) {
   const Content = useMemo(() => (
     <ReactMarkdown
       className="toc-content dark:text-neutral-300"
-      remarkPlugins={[gfm, remarkMermaid, remarkMath, remarkAlert, remarkBreaks]}
+      remarkPlugins={[gfm, remarkMath, remarkAlert, remarkBreaks]}
       children={safeContent}
       rehypePlugins={[rehypeKatex, rehypeRaw]}
       components={{
@@ -201,6 +200,17 @@ export function Markdown({ content }: { content: string }) {
           const language = match ? match[1] : "";
 
           if (isCodeBlock) {
+            const code = String(children).replace(/\n$/, "");
+
+            if (language === "mermaid") {
+              return (
+                <div className="my-4 overflow-x-auto rounded-xl bg-white p-4 dark:bg-neutral-950">
+                  <pre className="mermaid_default dark:hidden">{code}</pre>
+                  <pre className="mermaid_dark hidden dark:block">{code}</pre>
+                </div>
+              );
+            }
+
             return (
               <div className="relative group">
                 <SyntaxHighlighter
@@ -215,11 +225,11 @@ export function Markdown({ content }: { content: string }) {
                   wrapLongLines={true}
                   codeTagProps={{ style: codeBlockStyle }}
                 >
-                  {String(children).replace(/\n$/, "")}
+                  {code}
                 </SyntaxHighlighter>
                 <button className="absolute top-1 right-1 px-2 py-1 bg-w rounded-md text-sm bg-hover select-none invisible group-hover:visible"
                   onClick={() => {
-                    navigator.clipboard.writeText(String(children));
+                    navigator.clipboard.writeText(code);
                     setCopied(true);
                     setTimeout(() => setCopied(false), 2000);
                   }}
