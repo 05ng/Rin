@@ -17,7 +17,6 @@ import { useSiteConfig } from "../hooks/useSiteConfig";
 import { timeago } from "../utils/timeago";
 import { Button } from "../components/button";
 import { Tips } from "../components/tips";
-import mermaid from "mermaid";
 import { AdjacentSection } from "../components/adjacent_feed.tsx";
 import { stripImageUrlMetadata } from "../utils/image-upload";
 import { articlePath } from "../utils/article-url";
@@ -163,26 +162,6 @@ export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?
       });
     ref.current = `${id}_${routeLang || language}`;
   }, [id, language, routeLang, i18n]);
-  useEffect(() => {
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: "default",
-    });
-    mermaid.run({
-      suppressErrors: true,
-      nodes: document.querySelectorAll("pre.mermaid_default")
-    }).then(() => {
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: "dark",
-      });
-      mermaid.run({
-        suppressErrors: true,
-        nodes: document.querySelectorAll("pre.mermaid_dark")
-      });
-    })
-  }, [feed]);
-
   return (
     <Waiting for={feed || error}>
       {feed && (

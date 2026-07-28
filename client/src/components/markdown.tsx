@@ -1,5 +1,6 @@
 import "katex/dist/katex.min.css";
 import React, { cloneElement, isValidElement, useEffect, useMemo, useRef } from "react";
+import mermaid from "mermaid";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import {
@@ -120,13 +121,40 @@ export function Markdown({ content }: { content: string }) {
   const colorMode = useColorMode();
   const [index, setIndex] = React.useState(-1);
   const slides = useRef<SlideImage[]>();
+  const markdownRef = useRef<HTMLDivElement>(null);
   const safeContent = useMemo(() => escapeUnsafeScriptTags(content), [content]);
 
   useEffect(() => {
     slides.current = undefined;
   }, [content]);
 
+  useEffect(() => {
+    const root = markdownRef.current;
+    if (!root) {
+      return;
+    }
 
+    const render = async () => {
+      try {
+        const defaultNodes = root.querySelectorAll<HTMLElement>("pre.mermaid_default");
+        const darkNodes = root.querySelectorAll<HTMLElement>("pre.mermaid_dark");
+
+        if (defaultNodes.length > 0) {
+          mermaid.initialize({ startOnLoad: false, theme: "default" });
+          await mermaid.run({ suppressErrors: true, nodes: defaultNodes });
+        }
+
+        if (darkNodes.length > 0) {
+          mermaid.initialize({ startOnLoad: false, theme: "dark" });
+          await mermaid.run({ suppressErrors: true, nodes: darkNodes });
+        }
+      } catch (error) {
+        console.error("Failed to render Mermaid diagram", error);
+      }
+    };
+
+    void render();
+  }, [safeContent]);
 
   const Content = useMemo(() => (
     <ReactMarkdown
@@ -478,7 +506,9 @@ export function Markdown({ content }: { content: string }) {
 
   return (
     <>
-      {Content}
+      <div ref={markdownRef}>
+        {Content}
+      </div>
       <Lightbox
         plugins={[Download, Zoom, Counter]}
         index={index}

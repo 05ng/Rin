@@ -1,7 +1,6 @@
 import type { ArticleLanguage, TranslationCandidate } from "@rin/api";
 import i18n from 'i18next';
-import _ from 'lodash';
-import {useCallback, useEffect, useState} from "react";
+import {useEffect, useState} from "react";
 import {Helmet} from "react-helmet-async";
 import {useTranslation} from "react-i18next";
 import Loading from 'react-loading';
@@ -13,7 +12,6 @@ import {Cache} from '../utils/cache';
 import {useSiteConfig} from "../hooks/useSiteConfig";
 import {siteName} from "../utils/constants";
 import { articlePath } from "../utils/article-url";
-import mermaid from 'mermaid';
 import { MarkdownEditor } from '../components/markdown_editor';
 
 async function publish({
@@ -237,31 +235,6 @@ export function WritingPage({ id }: { id?: number }) {
         if (data) setTranslationCandidates(data);
       });
   }, [id, language]);
-  const debouncedUpdate = useCallback(
-    _.debounce(() => {
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: "default",
-      });
-      mermaid.run({
-        suppressErrors: true,
-        nodes: document.querySelectorAll("pre.mermaid_default")
-      }).then(()=>{
-        mermaid.initialize({
-          startOnLoad: false,
-          theme: "dark",
-        });
-        mermaid.run({
-          suppressErrors: true,
-          nodes: document.querySelectorAll("pre.mermaid_dark")
-        });
-      })
-    }, 100),
-    []
-  );
-  useEffect(() => {
-    debouncedUpdate();
-  }, [content, debouncedUpdate]);
   function PublishButton({ className }: { className?: string }) {
     return (
       <button

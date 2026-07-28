@@ -482,7 +482,7 @@ export function MarkdownEditor({ content, setContent, placeholder = "> Write you
           className={"min-h-0 overflow-y-auto rounded-none border-0 bg-w px-4 py-4 border-t sm:border-none " + (preview === 'edit' ? "hidden" : "")}
           style={{ height: height }}
         >
-          <Markdown content={content ? content : placeholder} />
+          {preview !== 'edit' ? <Markdown content={content ? content : placeholder} /> : null}
         </div>
       </div>
       <AlertUI />

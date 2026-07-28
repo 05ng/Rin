@@ -1,7 +1,16 @@
 import "../../test/setup";
-import { render, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { render, waitFor, within } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { Markdown } from "../markdown";
+
+const mermaidMock = vi.hoisted(() => ({
+  initialize: vi.fn(),
+  run: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock("mermaid", () => ({
+  default: mermaidMock,
+}));
 
 const mermaidDiagram = `graph TD
     classDef server fill:#ff9999,stroke:#cc0000,stroke-width:2px;
@@ -13,7 +22,7 @@ const mermaidDiagram = `graph TD
     U4[User - Sydney]:::user -->|Very High Latency| S`;
 
 describe("Markdown Mermaid rendering", () => {
-  it("renders fenced Mermaid blocks as Mermaid source nodes", () => {
+  it("renders fenced Mermaid blocks as Mermaid source nodes", async () => {
     const { container } = render(<Markdown content={`\`\`\`mermaid
 ${mermaidDiagram}
 \`\`\``} />);
@@ -23,5 +32,11 @@ ${mermaidDiagram}
     expect(mermaidBlocks[0]).toHaveTextContent("graph TD");
     expect(mermaidBlocks[0]).toHaveTextContent("Central Server<br/>New York");
     expect(within(mermaidBlocks[0] as HTMLElement).queryByText("New York")).toBeNull();
+
+    await waitFor(() => {
+      expect(mermaidMock.run).toHaveBeenCalledTimes(2);
+    });
+    expect(mermaidMock.initialize).toHaveBeenCalledWith({ startOnLoad: false, theme: "default" });
+    expect(mermaidMock.initialize).toHaveBeenCalledWith({ startOnLoad: false, theme: "dark" });
   });
 });
