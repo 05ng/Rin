@@ -3,13 +3,16 @@ import { render, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { Markdown } from "../markdown";
 
-const mermaidMock = vi.hoisted(() => ({
+const mermaidMock = {
   initialize: vi.fn(),
   run: vi.fn(() => Promise.resolve()),
-}));
+};
 
 vi.mock("mermaid", () => ({
-  default: mermaidMock,
+  default: {
+    initialize: (...args: Parameters<typeof mermaidMock.initialize>) => mermaidMock.initialize(...args),
+    run: (...args: Parameters<typeof mermaidMock.run>) => mermaidMock.run(...args),
+  },
 }));
 
 const mermaidDiagram = `graph TD
