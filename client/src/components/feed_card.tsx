@@ -140,7 +140,7 @@ export function FeedCard({ id, alias, title, avatar, draft, listed, top, languag
                 </div>
             ) : null}
             <div className={activeVariant === "editorial" ? "px-2 pb-2" : ""}>
-                <h1 className={styles.title}>{title}</h1>
+                <h2 className={styles.title}>{title}</h2>
                 <ArticleVectorBadge vectorized={vectorized} />
                 <p className={`space-x-2 ${styles.meta}`}>
                     <span title={new Date(createdAt).toLocaleString()}>

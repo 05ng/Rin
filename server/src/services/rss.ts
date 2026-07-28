@@ -17,6 +17,65 @@ let remarkGfm: any;
 let remarkRehype: any;
 let rehypeStringify: any;
 
+const DEFAULT_CANONICAL_HOST = "agenticlife.org";
+
+function getPublicBaseUrl(env: Env, requestUrl?: string) {
+    const configuredUrl = (env.FRONTEND_URL || env.SITE_URL || "").trim();
+    if (configuredUrl) {
+        return configuredUrl.replace(/\/$/, "");
+    }
+
+    if (requestUrl) {
+        return new URL(requestUrl).origin;
+    }
+
+    return `https://${env.CANONICAL_HOST || DEFAULT_CANONICAL_HOST}`;
+}
+
+function articleUrl(frontendUrl: string, id: number, alias: string | null, language: string) {
+    const path = alias ? `/${encodeURIComponent(alias)}` : `/feed/${id}`;
+    const localizedPath = language === "en" ? path : `/${language}${path}`;
+    return `${frontendUrl}${localizedPath}`;
+}
+
+function absolutizeFeedUrl(value: string, frontendUrl: string) {
+    if (!value.startsWith("/")) {
+        return value;
+    }
+
+    return `${frontendUrl}${value}`;
+}
+
+function normalizeCachedFeedContent(content: string, fileName: string, frontendUrl: string) {
+    if (fileName.endsWith(".json")) {
+        try {
+            const data = JSON.parse(content);
+            if (!data.home_page_url) {
+                data.home_page_url = frontendUrl;
+            }
+            if (typeof data.feed_url === "string") {
+                data.feed_url = absolutizeFeedUrl(data.feed_url, frontendUrl);
+            }
+            if (Array.isArray(data.items)) {
+                data.items = data.items.map((item: Record<string, unknown>) => ({
+                    ...item,
+                    url: typeof item.url === "string" ? absolutizeFeedUrl(item.url, frontendUrl) : item.url,
+                    external_url: typeof item.external_url === "string" ? absolutizeFeedUrl(item.external_url, frontendUrl) : item.external_url,
+                }));
+            }
+            return JSON.stringify(data);
+        } catch {
+            return content;
+        }
+    }
+
+    return content
+        .replace(/<link><\/link>/g, `<link>${frontendUrl}</link>`)
+        .replace(/href=(["'])\/(rss\.xml|atom\.xml|rss\.json|feed\.json)\1/g, `href="${frontendUrl}/$2"`)
+        .replace(/<link>\/([^<]+)<\/link>/g, `<link>${frontendUrl}/$1</link>`)
+        .replace(/<id>\/([^<]+)<\/id>/g, `<id>${frontendUrl}/$1</id>`);
+}
+
 async function initRSSModules() {
     if (!Feed) {
         const feed = await import("feed");
@@ -91,8 +150,10 @@ async function handleFeed(c: AppContext, fileName: string) {
 
         if (response) {
             console.log(`[RSS] Storage hit for ${key}`);
+            const frontendUrl = getPublicBaseUrl(env, c.req.url);
             const text = await profileAsync(c, 'rss_s3_body', () => response.text());
-            return c.text(text, 200, {
+            const normalizedText = normalizeCachedFeedContent(text, fileName, frontendUrl);
+            return c.text(normalizedText, 200, {
                 'Content-Type': contentType,
                 'Cache-Control': 'public, max-age=3600',
             });
@@ -104,7 +165,7 @@ async function handleFeed(c: AppContext, fileName: string) {
     // Generate feed in real-time (fallback or primary mode)
     try {
         console.log(`[RSS] Generating ${fileName} in real-time...`);
-        const frontendUrl = new URL(c.req.url).origin;
+        const frontendUrl = getPublicBaseUrl(env, c.req.url);
         const feed = await profileAsync(c, 'rss_generate_feed', () => generateFeed(env, db, frontendUrl, c));
         
         let content: string;
@@ -144,8 +205,8 @@ async function generateFeed(env: Env, db: DB, frontendUrl: string, c?: AppContex
     const publicBaseUrl = frontendUrl || undefined;
 
     let feedConfig: any = {
-        title: env.RSS_TITLE,
-        description: env.RSS_DESCRIPTION || "Feed from Rin",
+        title: env.RSS_TITLE || env.NAME,
+        description: env.RSS_DESCRIPTION || env.DESCRIPTION || "Feed from Rin",
         id: frontendUrl,
         link: frontendUrl,
         copyright: "All rights reserved 2024",
@@ -216,9 +277,7 @@ async function generateFeed(env: Env, db: DB, frontendUrl: string, c?: AppContex
 
     for (const f of feed_list) {
         const { summary, content, user, ...other } = f;
-        const articleUrl = other.alias
-            ? `${frontendUrl}/${encodeURIComponent(other.alias)}`
-            : `${frontendUrl}/feed/${other.id}`;
+        const itemUrl = articleUrl(frontendUrl, other.id, other.alias, other.language);
         
         // Convert markdown to HTML
         let contentHtml = '';
@@ -240,7 +299,7 @@ async function generateFeed(env: Env, db: DB, frontendUrl: string, c?: AppContex
         feed.addItem({
             title: other.title || "No title",
             id: other.id?.toString() || "0",
-            link: articleUrl,
+            link: itemUrl,
             date: other.createdAt,
             description: summary.length > 0
                 ? summary
@@ -260,7 +319,7 @@ export async function rssCrontab(env: Env, db: DB) {
     // Generate feed
     // For cron jobs, we don't have a request context, so we use a placeholder
     // The RSS feeds generated by cron jobs will be stored in S3 and served from there
-    const frontendUrl = '';
+    const frontendUrl = getPublicBaseUrl(env);
     const feed = await generateFeed(env, db, frontendUrl);
     
     // Save to S3 (if configured)

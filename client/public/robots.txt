@@ -1,7 +1,12 @@
-User-agent: Googlebot
-Disallow: /writing/
-
 User-agent: *
+Disallow: /admin/
+Disallow: /login
+Disallow: /callback
+Disallow: /profile
+Disallow: /user/
+Disallow: /api/auth/
+Disallow: /api/storage/
+Disallow: /api/wp/
 Allow: /
 
 Sitemap: https://agenticlife.org/sitemap.xml

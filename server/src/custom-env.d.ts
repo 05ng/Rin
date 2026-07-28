@@ -11,6 +11,10 @@ declare global {
     RIN_GOOGLE_CLIENT_ID?: string;
     RIN_GOOGLE_CLIENT_SECRET?: string;
     CANONICAL_HOST?: string;
+    FRONTEND_URL?: string;
+    SITE_URL?: string;
+    NAME?: string;
+    DESCRIPTION?: string;
     TASK_QUEUE?: Queue<QueueTask>;
     R2_BUCKET?: R2Bucket;
     AI?: any;

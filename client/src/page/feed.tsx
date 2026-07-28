@@ -67,13 +67,46 @@ export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?
   const canonicalUrl = feed
     ? new URL(articlePath(feed.id, feed.alias, feed.language), window.location.origin).toString()
     : "";
-  const description = feed ? plainTextExcerpt(feed.content) : "";
+  const feedSummary = feed ? (feed as Feed & { summary?: string }).summary : undefined;
+  const description = feed ? plainTextExcerpt(feedSummary || feed.content) : "";
+  const seoImage = stripImageUrlMetadata(headImage ?? siteConfig.avatar);
   const alternateArticles = feed
     ? [
         { id: feed.id, alias: feed.alias, language: feed.language },
         ...(feed.translations ?? []),
       ]
     : [];
+  const articleStructuredData = feed
+    ? {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        headline: feed.title ?? "Unnamed",
+        description,
+        image: seoImage ? [seoImage] : undefined,
+        datePublished: new Date(feed.createdAt).toISOString(),
+        dateModified: new Date(feed.updatedAt || feed.createdAt).toISOString(),
+        author: {
+          "@type": "Person",
+          name: feed.user.username,
+        },
+        publisher: {
+          "@type": "Organization",
+          name: siteName,
+          logo: seoImage
+            ? {
+                "@type": "ImageObject",
+                url: seoImage,
+              }
+            : undefined,
+        },
+        mainEntityOfPage: {
+          "@type": "WebPage",
+          "@id": canonicalUrl,
+        },
+        inLanguage: feed.language || "en",
+        keywords: hashtags.map(({ name }) => name).join(", ") || undefined,
+      }
+    : undefined;
   function deleteFeed() {
     // Confirm
     showConfirm(
@@ -182,7 +215,7 @@ export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?
           <title>{`${feed.title ?? "Unnamed"} - ${siteName}`}</title>
           <meta property="og:site_name" content={siteName} />
           <meta property="og:title" content={feed.title ?? ""} />
-          <meta property="og:image" content={headImage ?? siteConfig.avatar} />
+          {seoImage && <meta property="og:image" content={seoImage} />}
           <meta property="og:type" content="article" />
           <meta property="og:url" content={canonicalUrl} />
           <meta
@@ -198,6 +231,15 @@ export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?
             name="description"
             content={description}
           />
+          <meta name="twitter:card" content="summary_large_image" />
+          <meta name="twitter:title" content={feed.title ?? ""} />
+          <meta name="twitter:description" content={description} />
+          {seoImage && <meta name="twitter:image" content={seoImage} />}
+          {articleStructuredData && (
+            <script type="application/ld+json">
+              {JSON.stringify(articleStructuredData)}
+            </script>
+          )}
         </Helmet>
       )}
       <div className="w-full flex flex-row justify-center ani-show">

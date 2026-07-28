@@ -6,6 +6,7 @@ const ROOT_FEED_PATTERN = /^\/(rss\.xml|atom\.xml|rss\.json|feed\.json|feed\.xml
 const APP_PUBLIC_ROUTE_PATTERN = /^\/(favicon|favicon\.ico)(?:\/|$)/;
 const DEFAULT_CANONICAL_HOST = "agenticlife.org";
 const DEFAULT_SITE_NAME = "Agentic Life";
+const HTML_CONTENT_TYPE_PATTERN = /\btext\/html\b/i;
 const PRERENDER_USER_AGENTS = [
   "googlebot",
   "bingbot",
@@ -59,7 +60,15 @@ function isAppPublicRoute(pathname: string) {
 }
 
 function isStaticAssetRequest(pathname: string) {
-  return /\.\w+$/.test(pathname);
+  return (
+    pathname.startsWith("/assets/") ||
+    pathname.startsWith("/locales/") ||
+    /^\/(?:favicon\.png|robots\.txt|cantarell_[^/]+\.(?:woff2?|ttf|otf))$/.test(pathname)
+  );
+}
+
+function isHtmlResponse(response: Response) {
+  return HTML_CONTENT_TYPE_PATTERN.test(response.headers.get("Content-Type") || "");
 }
 
 function normalizeDefaultEnglishPath(pathname: string) {
@@ -84,15 +93,44 @@ function ensureHeadTag(html: string, tag: string, existsPattern: RegExp) {
   return html.replace(/<\/head>/i, `${tag}</head>`);
 }
 
-function normalizePrerenderedHtml(html: string, requestUrl: URL, env: Env) {
+async function getCurrentAssetReferences(requestUrl: URL, env: Env) {
+  if (!env.ASSETS) {
+    return null;
+  }
+
+  try {
+    const indexRequest = new Request(new URL("/", requestUrl.origin).toString());
+    const indexResponse = await env.ASSETS.fetch(indexRequest);
+    if (!indexResponse.ok) {
+      return null;
+    }
+
+    const indexHtml = await indexResponse.text();
+    const scriptMatch = indexHtml.match(/<script\b[^>]*\bsrc=(["'])(\/assets\/[^"']+\.js)\1[^>]*><\/script>/i);
+    const styleMatch = indexHtml.match(/<link\b[^>]*\brel=(["'])stylesheet\1[^>]*\bhref=(["'])(\/assets\/[^"']+\.css)\2[^>]*>/i);
+
+    return {
+      scriptSrc: scriptMatch?.[2],
+      styleHref: styleMatch?.[3],
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function normalizePrerenderedHtml(html: string, requestUrl: URL, env: Env) {
   const canonicalHost = env.CANONICAL_HOST || DEFAULT_CANONICAL_HOST;
   const origin = `${requestUrl.protocol}//${canonicalHost}`;
   const canonicalPath = normalizeDefaultEnglishPath(requestUrl.pathname);
   const canonicalUrl = `${origin}${canonicalPath}${requestUrl.search}`;
   const documentLanguage = requestUrl.pathname.startsWith("/zh-CN/") ? "zh-CN" : "en";
+  const currentAssets = await getCurrentAssetReferences(requestUrl, env);
 
   let normalized = html
     .replace(/<html\b([^>]*)\s+lang=(["']).*?\2/i, `<html$1 lang="${documentLanguage}"`)
+    .replace(/<meta\b[^>]*\bname=(["'])description\1[^>]*\bcontent=(["'])AgenticLife - A lightweight personal blogging system\2[^>]*>/gi, "")
+    .replace(/<meta\b[^>]*\bname=(["'])keywords\1[^>]*\bcontent=(["'])blog, personal, agenticlife\2[^>]*>/gi, "")
+    .replace(/<meta\b[^>]*\bname=(["'])author\1[^>]*\bcontent=(["'])AgenticLife\2[^>]*>/gi, "")
     .replace(/\bname=(["'])og:description\1/gi, 'property="og:description"')
     .replace(/property=(["'])og:site_name\1\s+content=(["'])\2/gi, `property="og:site_name" content="${DEFAULT_SITE_NAME}"`)
     .replace(new RegExp(`${origin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/en/`, "g"), `${origin}/`)
@@ -102,6 +140,14 @@ function normalizePrerenderedHtml(html: string, requestUrl: URL, env: Env) {
 
   if (requestUrl.pathname === "/") {
     normalized = normalized.replace(/property=(["'])og:type\1\s+content=(["'])article\2/gi, 'property="og:type" content="website"');
+  }
+
+  if (currentAssets?.scriptSrc) {
+    normalized = normalized.replace(/\bsrc=(["'])\/assets\/[^"']+\.js\1/gi, `src="${currentAssets.scriptSrc}"`);
+  }
+
+  if (currentAssets?.styleHref) {
+    normalized = normalized.replace(/\bhref=(["'])\/assets\/[^"']+\.css\1/gi, `href="${currentAssets.styleHref}"`);
   }
 
   normalized = ensureHeadTag(
@@ -121,6 +167,9 @@ async function tryServeAsset(request: Request, env: Env) {
   try {
     const asset = await env.ASSETS.fetch(request);
     if (asset.status === 200 || (asset.status >= 300 && asset.status < 400)) {
+      if (isStaticAssetRequest(new URL(request.url).pathname) && isHtmlResponse(asset)) {
+        return null;
+      }
       return asset;
     }
   } catch {}
@@ -166,7 +215,7 @@ export async function handleFetch(request: Request, env: Env, ctx: ExecutionCont
       newHeaders.set("Cache-Control", "private, no-store");
       newHeaders.set("Vary", "User-Agent");
       const html = await asset.text();
-      return new Response(normalizePrerenderedHtml(html, url, env), {
+      return new Response(await normalizePrerenderedHtml(html, url, env), {
         status: asset.status,
         headers: newHeaders
       });
@@ -190,6 +239,13 @@ export async function handleFetch(request: Request, env: Env, ctx: ExecutionCont
     if (asset) {
       return asset;
     }
+
+    return new Response("Not found", {
+      status: 404,
+      headers: {
+        "Cache-Control": "public, max-age=60",
+      },
+    });
   }
 
   const indexResponse = await serveSpaEntry(request, env);

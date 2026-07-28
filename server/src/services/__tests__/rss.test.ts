@@ -50,7 +50,25 @@ describe('RSSService', () => {
             expect(text).toContain('<rss');
             expect(text).toContain('Test Feed 1');
             expect(text).toContain('Test Feed 2');
+            expect(text).toContain('<link>http://localhost/feed/1</link>');
+            expect(text).not.toContain('<link></link>');
             expect(text).not.toContain('Draft Feed');
+        });
+
+        it('should use configured frontend URL for generated feed links', async () => {
+            const configuredCtx = await setupTestApp(RSSService, {
+                FRONTEND_URL: 'https://example.com',
+            });
+            await seedTestData(configuredCtx.sqlite);
+
+            const res = await configuredCtx.app.request('/rss.xml', { method: 'GET' }, configuredCtx.env);
+
+            expect(res.status).toBe(200);
+            const text = await res.text();
+            expect(text).toContain('<link>https://example.com/feed/1</link>');
+            expect(text).not.toContain('<link>http://localhost/feed/1</link>');
+
+            cleanupTestDB(configuredCtx.sqlite);
         });
 
         it('should serve atom.xml', async () => {
@@ -142,7 +160,7 @@ describe('RSSService', () => {
 
                         return {
                             key,
-                            size: 18,
+                            size: 74,
                             etag: 'etag',
                             httpEtag: 'etag',
                             uploaded: new Date('2025-01-01T00:00:00Z'),
@@ -152,13 +170,13 @@ describe('RSSService', () => {
                             writeHttpMetadata(headers: Headers) {
                                 headers.set('Content-Type', 'application/rss+xml; charset=UTF-8');
                             },
-                            body: new Blob(['<rss>cached</rss>']).stream(),
+                            body: new Blob(['<rss><channel><link></link><item><link>/welcome</link></item></channel></rss>']).stream(),
                             bodyUsed: false,
-                            arrayBuffer: async () => new TextEncoder().encode('<rss>cached</rss>').buffer,
-                            text: async () => '<rss>cached</rss>',
+                            arrayBuffer: async () => new TextEncoder().encode('<rss><channel><link></link><item><link>/welcome</link></item></channel></rss>').buffer,
+                            text: async () => '<rss><channel><link></link><item><link>/welcome</link></item></channel></rss>',
                             json: async () => ({ value: 'cached' }),
-                            blob: async () => new Blob(['<rss>cached</rss>']),
-                            bytes: async () => new Uint8Array(new TextEncoder().encode('<rss>cached</rss>')),
+                            blob: async () => new Blob(['<rss><channel><link></link><item><link>/welcome</link></item></channel></rss>']),
+                            bytes: async () => new Uint8Array(new TextEncoder().encode('<rss><channel><link></link><item><link>/welcome</link></item></channel></rss>')),
                         } as unknown as R2ObjectBody;
                     },
                     head: async () => null,
@@ -169,7 +187,7 @@ describe('RSSService', () => {
             const res = await ctx.app.request('/rss.xml', { method: 'GET' }, cachedEnv);
 
             expect(res.status).toBe(200);
-            expect(await res.text()).toBe('<rss>cached</rss>');
+            expect(await res.text()).toBe('<rss><channel><link>http://localhost</link><item><link>http://localhost/welcome</link></item></channel></rss>');
 
             cleanupTestDB(ctx.sqlite);
         });
