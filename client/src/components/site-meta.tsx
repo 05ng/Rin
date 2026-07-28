@@ -28,9 +28,40 @@ export function SiteMeta({ title, description, image, type = "website", children
     const documentLanguage = i18n.resolvedLanguage || i18n.language || 'en';
     
     // Attempt to construct canonical URL
-    const canonicalUrl = typeof window !== 'undefined' 
-        ? `${window.location.origin}${location}`
-        : `https://agenticlife.org${location}`;
+    const siteUrl = typeof window !== 'undefined'
+        ? window.location.origin
+        : "https://agenticlife.org";
+    const canonicalUrl = `${siteUrl}${location}`;
+    const siteIdentityId = `${siteUrl}/#organization`;
+    const siteStructuredData = {
+        "@context": "https://schema.org",
+        "@graph": [
+            {
+                "@type": "Organization",
+                "@id": siteIdentityId,
+                name: siteName,
+                url: siteUrl,
+                logo: pageImage
+                    ? {
+                        "@type": "ImageObject",
+                        url: pageImage,
+                    }
+                    : undefined,
+                image: pageImage || undefined,
+            },
+            {
+                "@type": "WebSite",
+                "@id": `${siteUrl}/#website`,
+                url: siteUrl,
+                name: siteName,
+                description: pageDescription,
+                inLanguage: documentLanguage,
+                publisher: {
+                    "@id": siteIdentityId,
+                },
+            },
+        ],
+    };
 
     return (
         <>
@@ -52,6 +83,9 @@ export function SiteMeta({ title, description, image, type = "website", children
                 <meta name="twitter:title" content={pageTitle} />
                 <meta name="twitter:description" content={pageDescription} />
                 {pageImage && <meta name="twitter:image" content={pageImage} />}
+                <script type="application/ld+json">
+                    {JSON.stringify(siteStructuredData)}
+                </script>
             </Helmet>
             {children}
         </>

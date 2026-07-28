@@ -21,6 +21,7 @@ import mermaid from "mermaid";
 import { AdjacentSection } from "../components/adjacent_feed.tsx";
 import { stripImageUrlMetadata } from "../utils/image-upload";
 import { articlePath } from "../utils/article-url";
+import { seoTextExcerpt } from "../utils/seo-text";
 
 function extractFirstMarkdownImageUrl(content: string) {
 
@@ -30,19 +31,6 @@ function extractFirstMarkdownImageUrl(content: string) {
   }
 
   return stripImageUrlMetadata(match[1]);
-}
-
-function plainTextExcerpt(content: string, maxLength = 200) {
-  const plainText = content
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<[^>]+>/g, "")
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/[`*_~>#-]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  return plainText.length > maxLength ? plainText.slice(0, maxLength) : plainText;
 }
 
 export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?: string, TOC: () => JSX.Element, clean: (id: string) => void }) {
@@ -68,7 +56,7 @@ export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?
     ? new URL(articlePath(feed.id, feed.alias, feed.language), window.location.origin).toString()
     : "";
   const feedSummary = feed ? (feed as Feed & { summary?: string }).summary : undefined;
-  const description = feed ? plainTextExcerpt(feedSummary || feed.content) : "";
+  const description = feed ? seoTextExcerpt(feedSummary || feed.content) : "";
   const seoImage = stripImageUrlMetadata(headImage ?? siteConfig.avatar);
   const alternateArticles = feed
     ? [
