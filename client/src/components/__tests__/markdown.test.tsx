@@ -1,6 +1,6 @@
 import "../../test/setup";
 import { render, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Markdown } from "../markdown";
 
 const mermaidMock = {
@@ -10,10 +10,26 @@ const mermaidMock = {
 
 vi.mock("mermaid", () => ({
   default: {
-    initialize: (...args: Parameters<typeof mermaidMock.initialize>) => mermaidMock.initialize(...args),
-    run: (...args: Parameters<typeof mermaidMock.run>) => mermaidMock.run(...args),
+    initialize: (...args: Parameters<typeof mermaidMock.initialize>) =>
+      mermaidMock.initialize(...args),
+    run: (...args: Parameters<typeof mermaidMock.run>) =>
+      mermaidMock.run(...args),
   },
 }));
+beforeEach(() => {
+  mermaidMock.initialize.mockClear();
+  mermaidMock.run.mockClear();
+});
+
+const edgeNetworkDiagram = `graph TD
+    classDef edge fill:#99ccff,stroke:#0066cc,stroke-width:2px;
+    classDef db fill:#ffcc99,stroke:#cc6600,stroke-width:2px;
+    classDef user fill:#f9f9f9,stroke:#333,stroke-width:1px;
+
+    U1[User - Tokyo]:::user -->|< 20ms| E1((Edge Node<br/>Tokyo)):::edge
+    U2[User - London]:::user -->|< 20ms| E2((Edge Node<br/>London)):::edge
+    E1 -.-|Background Sync| DB[(Core Database<br/>Primary Region)]:::db
+    E2 -.-|Background Sync| DB`;
 
 const mermaidDiagram = `graph TD
     classDef server fill:#ff9999,stroke:#cc0000,stroke-width:2px;
@@ -41,5 +57,32 @@ ${mermaidDiagram}
     });
     expect(mermaidMock.initialize).toHaveBeenCalledWith({ startOnLoad: false, theme: "default" });
     expect(mermaidMock.initialize).toHaveBeenCalledWith({ startOnLoad: false, theme: "dark" });
+  });
+
+  it("renders standalone Mermaid blocks between prose as diagrams", async () => {
+    const { container } = render(<Markdown content={`Before the chart.
+
+${mermaidDiagram}
+
+The Challenges of the Traditional Model
+
+${edgeNetworkDiagram}
+
+After the chart.`} />);
+    const mermaidBlocks = container.querySelectorAll("pre.mermaid_default, pre.mermaid_dark");
+
+    expect(mermaidBlocks).toHaveLength(4);
+    expect(mermaidBlocks[0]).toHaveTextContent("Central Server<br/>New York");
+    expect(mermaidBlocks[1]).toHaveTextContent("Central Server<br/>New York");
+    expect(mermaidBlocks[2]).toHaveTextContent("Edge Node<br/>Tokyo");
+    expect(mermaidBlocks[2]).toHaveTextContent("|< 20ms|");
+    expect(mermaidBlocks[2]).not.toHaveTextContent("The Challenges of the Traditional Model");
+
+    await waitFor(() => {
+      expect(mermaidMock.run).toHaveBeenCalledTimes(2);
+    });
+    expect(container).toHaveTextContent("Before the chart.");
+    expect(container).toHaveTextContent("The Challenges of the Traditional Model");
+    expect(container).toHaveTextContent("After the chart.");
   });
 });

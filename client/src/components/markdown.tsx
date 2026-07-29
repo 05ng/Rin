@@ -28,6 +28,75 @@ function escapeUnsafeScriptTags(content: string) {
   return content.replace(/<\/?script\b/gi, (match) => match.replace("<", "&lt;"));
 }
 
+const mermaidDiagramStartPattern = new RegExp([
+  "^\\s*(?:graph|flowchart)\\s+(?:TB|TD|BT|RL|LR)\\b",
+  "^\\s*(?:sequenceDiagram|classDiagram|classDiagram-v2|stateDiagram|stateDiagram-v2|erDiagram|journey|gantt|pie|gitGraph|mindmap|timeline|quadrantChart|requirementDiagram|C4Context|C4Container|C4Component|C4Dynamic|sankey-beta|xychart-beta|block-beta|packet-beta|architecture-beta)\\b",
+].join("|"));
+
+const mermaidContinuationPattern = new RegExp([
+  "^\\s+\\S",
+  "^\\s*(?:classDef|class|style|linkStyle|subgraph|end|click|accTitle|accDescr|title|participant|actor|loop|alt|opt|par|and|rect|note|activate|deactivate|autonumber|section|dateFormat|axisFormat|tickInterval|excludes|todayMarker)\\b",
+  "(?:-->|---|-.->|==>|->>|-->>|-)\\b",
+  ":::",
+].join("|"));
+
+function normalizeStandaloneMermaidBlocks(content: string) {
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const normalized: string[] = [];
+  let inFence = false;
+  let index = 0;
+
+  while (index < lines.length) {
+    const line = lines[index];
+    const trimmedStart = line.trimStart();
+
+    if (trimmedStart.startsWith("```")) {
+      inFence = !inFence;
+      normalized.push(line);
+      index++;
+      continue;
+    }
+
+    if (!inFence && mermaidDiagramStartPattern.test(line)) {
+      const block: string[] = [];
+      const trailingBlanks: string[] = [];
+      let cursor = index;
+
+      while (cursor < lines.length) {
+        const currentLine = lines[cursor];
+
+        if (cursor > index && currentLine.trimStart().startsWith("```")) {
+          break;
+        }
+
+        if (currentLine.trim() === "") {
+          trailingBlanks.push(currentLine);
+          cursor++;
+          continue;
+        }
+
+        if (cursor === index || mermaidContinuationPattern.test(currentLine)) {
+          block.push(...trailingBlanks, currentLine);
+          trailingBlanks.length = 0;
+          cursor++;
+          continue;
+        }
+
+        break;
+      }
+
+      normalized.push("```mermaid", ...block, "```", ...trailingBlanks);
+      index = cursor;
+      continue;
+    }
+
+    normalized.push(line);
+    index++;
+  }
+
+  return normalized.join("\n");
+}
+
 const countNewlinesBeforeNode = (text: string, offset: number) => {
   let newlinesBefore = 0;
   for (let i = offset - 1; i >= 0; i--) {
@@ -122,7 +191,10 @@ export function Markdown({ content }: { content: string }) {
   const [index, setIndex] = React.useState(-1);
   const slides = useRef<SlideImage[]>();
   const markdownRef = useRef<HTMLDivElement>(null);
-  const safeContent = useMemo(() => escapeUnsafeScriptTags(content), [content]);
+  const safeContent = useMemo(
+    () => escapeUnsafeScriptTags(normalizeStandaloneMermaidBlocks(content)),
+    [content]
+  );
 
   useEffect(() => {
     slides.current = undefined;
