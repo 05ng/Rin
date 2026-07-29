@@ -1,6 +1,6 @@
 import "../../test/setup";
-import { render, waitFor, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, render, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Markdown } from "../markdown";
 
 const mermaidMock = {
@@ -19,6 +19,11 @@ vi.mock("mermaid", () => ({
 beforeEach(() => {
   mermaidMock.initialize.mockClear();
   mermaidMock.run.mockClear();
+  document.documentElement.setAttribute("data-color-mode", "light");
+});
+
+afterEach(() => {
+  cleanup();
 });
 
 const edgeNetworkDiagram = `graph TD
@@ -55,8 +60,20 @@ ${mermaidDiagram}
     await waitFor(() => {
       expect(mermaidMock.run).toHaveBeenCalledTimes(2);
     });
-    expect(mermaidMock.initialize).toHaveBeenCalledWith({ startOnLoad: false, theme: "default" });
-    expect(mermaidMock.initialize).toHaveBeenCalledWith({ startOnLoad: false, theme: "dark" });
+    expect(mermaidMock.initialize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startOnLoad: false,
+        theme: "default",
+        themeCSS: expect.stringContaining("fill: transparent !important"),
+      })
+    );
+    expect(mermaidMock.initialize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startOnLoad: false,
+        theme: "dark",
+        themeCSS: expect.stringContaining("fill: transparent !important"),
+      })
+    );
   });
 
   it("renders standalone Mermaid blocks between prose as diagrams", async () => {
@@ -84,5 +101,31 @@ After the chart.`} />);
     expect(container).toHaveTextContent("Before the chart.");
     expect(container).toHaveTextContent("The Challenges of the Traditional Model");
     expect(container).toHaveTextContent("After the chart.");
+  });
+
+  it("rerenders Mermaid diagrams after color mode changes", async () => {
+    render(<Markdown content={`\`\`\`mermaid
+${mermaidDiagram}
+\`\`\``} />);
+
+    await waitFor(() => {
+      expect(mermaidMock.run).toHaveBeenCalledTimes(2);
+    });
+
+    act(() => {
+      document.documentElement.setAttribute("data-color-mode", "dark");
+      window.dispatchEvent(new window.Event("colorSchemeChange"));
+    });
+
+    await waitFor(() => {
+      expect(mermaidMock.run).toHaveBeenCalledTimes(4);
+    });
+    expect(mermaidMock.initialize).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        startOnLoad: false,
+        theme: "dark",
+        themeCSS: expect.stringContaining("fill: transparent !important"),
+      })
+    );
   });
 });

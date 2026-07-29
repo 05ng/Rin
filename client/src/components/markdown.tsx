@@ -28,6 +28,16 @@ function escapeUnsafeScriptTags(content: string) {
   return content.replace(/<\/?script\b/gi, (match) => match.replace("<", "&lt;"));
 }
 
+const transparentMermaidElementThemeCSS = `
+.node rect,
+.node circle,
+.node ellipse,
+.node polygon,
+.node path {
+  fill: transparent !important;
+}
+`;
+
 const mermaidDiagramStartPattern = new RegExp([
   "^\\s*(?:graph|flowchart)\\s+(?:TB|TD|BT|RL|LR)\\b",
   "^\\s*(?:sequenceDiagram|classDiagram|classDiagram-v2|stateDiagram|stateDiagram-v2|erDiagram|journey|gantt|pie|gitGraph|mindmap|timeline|quadrantChart|requirementDiagram|C4Context|C4Container|C4Component|C4Dynamic|sankey-beta|xychart-beta|block-beta|packet-beta|architecture-beta)\\b",
@@ -96,6 +106,7 @@ function normalizeStandaloneMermaidBlocks(content: string) {
 
   return normalized.join("\n");
 }
+
 
 const countNewlinesBeforeNode = (text: string, offset: number) => {
   let newlinesBefore = 0;
@@ -212,12 +223,20 @@ export function Markdown({ content }: { content: string }) {
         const darkNodes = root.querySelectorAll<HTMLElement>("pre.mermaid_dark");
 
         if (defaultNodes.length > 0) {
-          mermaid.initialize({ startOnLoad: false, theme: "default" });
+          mermaid.initialize({
+            startOnLoad: false,
+            theme: "default",
+            themeCSS: transparentMermaidElementThemeCSS,
+          });
           await mermaid.run({ suppressErrors: true, nodes: defaultNodes });
         }
 
         if (darkNodes.length > 0) {
-          mermaid.initialize({ startOnLoad: false, theme: "dark" });
+          mermaid.initialize({
+            startOnLoad: false,
+            theme: "dark",
+            themeCSS: transparentMermaidElementThemeCSS,
+          });
           await mermaid.run({ suppressErrors: true, nodes: darkNodes });
         }
       } catch (error) {
@@ -226,7 +245,7 @@ export function Markdown({ content }: { content: string }) {
     };
 
     void render();
-  }, [safeContent]);
+  }, [safeContent, colorMode]);
 
   const Content = useMemo(() => (
     <ReactMarkdown
