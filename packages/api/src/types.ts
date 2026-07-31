@@ -440,4 +440,7 @@ export interface RestaurantGameState {
   money: number;
   tables: number;
   helpers: number;
+  shops?: number;
+  activeShop?: number;
+  payrollDue?: number;
 }

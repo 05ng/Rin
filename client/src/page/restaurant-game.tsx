@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useContext } from "react";
+import type { MouseEvent } from "react";
 import { client } from "../app/runtime";
 import { ProfileContext } from "../state/profile";
 
@@ -17,6 +18,11 @@ const MOVE_SPEED = 150; // pixels per second
 
 const TABLE_COST = 50;
 const HELPER_COST = 60;
+const SHOP_COST = 200;
+const HELPER_DAILY_SALARY = 20;
+
+const TABLE_SELL_VALUE = TABLE_COST;
+const SHOP_SELL_VALUE = SHOP_COST;
 
 const MENU_PRICES: Record<OrderType, number> = { burger: 5, hotdog: 3, coffee: 2, icecream: 1 };
 const MENU_EMOJIS: Record<OrderType, string> = { burger: "🍔", hotdog: "🌭", coffee: "☕", icecream: "🍦" };
@@ -39,6 +45,8 @@ const SPAWN_POINT = { x: 50, y: GAME_HEIGHT + 50 };
 const EXIT_POINT = { x: -50, y: -50 };
 const OWNER_SPAWN = { x: GAME_WIDTH - 200, y: GAME_HEIGHT - 50 };
 const HELPER_SPAWN = { x: GAME_WIDTH - 250, y: GAME_HEIGHT - 50 };
+const GATE_POS = { x: 110, y: GAME_HEIGHT - 55 };
+const GATE_TRIGGER_DISTANCE = 28;
 
 // --- Entity Types ---
 type Pos = { x: number; y: number };
@@ -64,7 +72,7 @@ type CustomerState = {
   facingLeft?: boolean;
 };
 
-type Task = 
+type Task =
   | { type: "grab", order: OrderType, targetPos: Pos }
   | { type: "serve", tableId: number, targetPos: Pos, order: OrderType }
   | { type: "collect", tableId: number, targetPos: Pos };
@@ -165,14 +173,14 @@ function closedMathGateState(): MathGateState {
 
 export function RestaurantGamePage() {
   const profile = useContext(ProfileContext);
-  
+
   // High-level state
   const [money, setMoney] = useState(0);
   const [timeLeft, setTimeLeft] = useState(INITIAL_DAY_LENGTH_SECONDS);
   const [dayRunning, setDayRunning] = useState(false);
   const [message, setMessage] = useState("");
   const [mathGate, setMathGate] = useState<MathGateState>(() => closedMathGateState());
-  
+
   // Game Entities Refs (mutable for loop)
   const stateRef = useRef({
     tables: [] as TableState[],
@@ -187,6 +195,9 @@ export function RestaurantGamePage() {
     ] as MachineState[],
     money: 0,
     helpersCount: 0,
+    shopCount: 1,
+    ownerManualTarget: undefined as Pos | undefined,
+    pendingGateTravel: false,
     customerIdCounter: 1,
     timeAccumulator: 0,
   });
@@ -195,6 +206,9 @@ export function RestaurantGamePage() {
   const [, setRenderTrigger] = useState(0);
   const [tableCount, setTableCount] = useState(1);
   const [helperCount, setHelperCount] = useState(0);
+  const [shopCount, setShopCount] = useState(1);
+  const [activeShop, setActiveShop] = useState(1);
+  const [payrollDue, setPayrollDue] = useState(0);
 
   const savedStateLoaded = useRef(false);
   const boardContainerRef = useRef<HTMLDivElement>(null);
@@ -221,6 +235,9 @@ export function RestaurantGamePage() {
         let loadedMoney = 0;
         let loadedTables = 1;
         let loadedHelpers = 0;
+        let loadedShops = 1;
+        let loadedActiveShop = 1;
+        let loadedPayrollDue = 0;
 
         if (profile) {
           try {
@@ -229,6 +246,9 @@ export function RestaurantGamePage() {
               loadedMoney = res.data.money;
               loadedTables = res.data.tables;
               loadedHelpers = res.data.helpers;
+              loadedShops = res.data.shops || 1;
+              loadedActiveShop = res.data.activeShop || 1;
+              loadedPayrollDue = res.data.payrollDue || 0;
             }
           } catch (e) {}
         } else {
@@ -239,16 +259,27 @@ export function RestaurantGamePage() {
                loadedMoney = data.money || 0;
                loadedTables = data.tables || 1;
                loadedHelpers = data.helpers || 0;
+               loadedShops = data.shops || 1;
+               loadedActiveShop = data.activeShop || 1;
+               loadedPayrollDue = data.payrollDue || 0;
              } catch (e) {}
           }
         }
 
+        loadedShops = Math.max(1, loadedShops);
+        loadedActiveShop = Math.min(Math.max(1, loadedActiveShop), loadedShops);
+        loadedPayrollDue = Math.max(0, loadedPayrollDue);
+
         setMoney(loadedMoney);
         setTableCount(loadedTables);
         setHelperCount(loadedHelpers);
-        
+        setShopCount(loadedShops);
+        setActiveShop(loadedActiveShop);
+        setPayrollDue(loadedPayrollDue);
+
         stateRef.current.money = loadedMoney;
         stateRef.current.helpersCount = loadedHelpers;
+        stateRef.current.shopCount = loadedShops;
         stateRef.current.tables = Array.from({ length: Math.max(1, loadedTables) }).map((_, i) => ({
           id: i + 1,
           pos: TABLE_POSITIONS[i],
@@ -260,7 +291,7 @@ export function RestaurantGamePage() {
           inventory: [],
           tasks: []
         }));
-        
+
         savedStateLoaded.current = true;
         setRenderTrigger(v => v + 1);
       };
@@ -284,6 +315,11 @@ export function RestaurantGamePage() {
 
   const startOpeningTest = () => {
     if (dayRunning) return;
+    if (payrollDue > 0) {
+      setMessage(`Pay the remaining $${payrollDue} helper salary before opening.`);
+      setTimeout(() => setMessage(""), 2400);
+      return;
+    }
     setMessage("");
     setMathGate(createOpeningTestState());
   };
@@ -324,7 +360,14 @@ export function RestaurantGamePage() {
   };
 
   const saveProgress = async () => {
-    const st = { money: stateRef.current.money, helpers: stateRef.current.helpersCount, tables: stateRef.current.tables.length };
+    const st = {
+      money: stateRef.current.money,
+      helpers: stateRef.current.helpersCount,
+      tables: stateRef.current.tables.length,
+      shops: stateRef.current.shopCount,
+      activeShop,
+      payrollDue,
+    };
     if (profile) {
       await client.game?.saveRestaurantState(st);
       setMessage("Game saved!");
@@ -333,6 +376,57 @@ export function RestaurantGamePage() {
       setMessage("Game saved locally!");
     }
     setTimeout(() => setMessage(""), 2000);
+  };
+
+  const settlePayroll = (amount: number) => {
+    if (amount <= 0 || payrollDue <= 0) return;
+
+    const remaining = payrollDue - amount;
+    if (remaining > 0) {
+      setPayrollDue(remaining);
+      setMessage(`Sold asset for $${amount}. Payroll still needs $${remaining}.`);
+      return;
+    }
+
+    const extra = Math.abs(remaining);
+    if (extra > 0) {
+      stateRef.current.money += extra;
+      setMoney(stateRef.current.money);
+    }
+    setPayrollDue(0);
+    setMessage("Helper salary paid. The shop can open again.");
+  };
+
+  const travelToNextShop = () => {
+    setActiveShop(current => {
+      const nextShop = current >= stateRef.current.shopCount ? 1 : current + 1;
+      setMessage(`Moved through the gate to Shop #${nextShop}.`);
+      return nextShop;
+    });
+  };
+
+  const handleDayEnd = () => {
+    const s = stateRef.current;
+    const salaryDue = s.helpersCount * HELPER_DAILY_SALARY;
+
+    if (salaryDue === 0) {
+      setMessage("Day over! Finishing up active customers...");
+      return;
+    }
+
+    if (s.money >= salaryDue) {
+      s.money -= salaryDue;
+      setMoney(s.money);
+      setPayrollDue(0);
+      setMessage(`Day over! Paid $${salaryDue} helper salary.`);
+      return;
+    }
+
+    const remaining = salaryDue - s.money;
+    s.money = 0;
+    setMoney(0);
+    setPayrollDue(remaining);
+    setMessage(`Day over! Helper salary still needs $${remaining}. Sell a table or shop to pay it.`);
   };
 
   // Main Game Loop
@@ -347,7 +441,7 @@ export function RestaurantGamePage() {
 
       if (dayRunning) {
         const s = stateRef.current;
-        
+
         // Time management
         s.timeAccumulator += dt;
         if (s.timeAccumulator >= 1) {
@@ -355,7 +449,7 @@ export function RestaurantGamePage() {
           setTimeLeft(prev => {
             if (prev <= 1) {
               setDayRunning(false);
-              setMessage("Day over! Finishing up active customers...");
+              handleDayEnd();
               return 0;
             }
             return prev - 1;
@@ -399,7 +493,7 @@ export function RestaurantGamePage() {
             emptyTable.state = "waiting";
             emptyTable.customerId = firstInQueue.id;
             emptyTable.order = firstInQueue.order;
-            
+
             firstInQueue.phase = "walking_to_table";
             firstInQueue.target = { ...emptyTable.pos };
             firstInQueue.tableId = emptyTable.id;
@@ -452,7 +546,7 @@ export function RestaurantGamePage() {
             const isMoving = distance(staff.pos, currentTask.targetPos) >= 5;
             staff.moving = isMoving;
             if (staff.pos.x !== prevX) staff.facingLeft = staff.pos.x < prevX;
-            
+
             if (!isMoving) {
               if (currentTask.type === "grab") {
                 const machine = s.machines.find(m => m.type === currentTask.order);
@@ -487,6 +581,22 @@ export function RestaurantGamePage() {
                 staff.tasks.shift();
               }
             }
+          } else if (isOwner && s.ownerManualTarget) {
+            const prevX = staff.pos.x;
+            staff.pos = moveTowards(staff.pos, s.ownerManualTarget, MOVE_SPEED, dt);
+            const reachedTarget = distance(staff.pos, s.ownerManualTarget) < 4;
+            staff.moving = !reachedTarget;
+            if (staff.pos.x !== prevX) staff.facingLeft = staff.pos.x < prevX;
+
+            if (reachedTarget) {
+              if (s.pendingGateTravel && distance(staff.pos, GATE_POS) <= GATE_TRIGGER_DISTANCE) {
+                travelToNextShop();
+                staff.pos = { x: GATE_POS.x + 80, y: GATE_POS.y };
+              }
+              s.pendingGateTravel = false;
+              s.ownerManualTarget = undefined;
+              staff.moving = false;
+            }
           } else {
             // Idle movement
             const spawnPoint = isOwner ? OWNER_SPAWN : { x: HELPER_SPAWN.x - staff.id * 30, y: HELPER_SPAWN.y };
@@ -503,10 +613,10 @@ export function RestaurantGamePage() {
         // 5. Helpers Logic
         s.helpers.forEach(h => {
           processStaff(h, false);
-          
+
           // AI Logic: Find tasks if we have capacity
           const projectedInventoryCount = h.inventory.length + h.tasks.filter(t => t.type === 'grab').length;
-          
+
           if (projectedInventoryCount < 3) {
             // Find a table waiting that isn't being served by ANYONE (Owner or other Helpers)
             const isTableBeingServed = (tableId: number) => {
@@ -515,7 +625,7 @@ export function RestaurantGamePage() {
             };
 
             const waitingTable = s.tables.find(t => t.state === "waiting" && !isTableBeingServed(t.id));
-            
+
             if (waitingTable && waitingTable.order) {
               const order = waitingTable.order;
               // Queue grab -> serve
@@ -539,8 +649,24 @@ export function RestaurantGamePage() {
           }
         });
         s.customers = s.customers.filter(c => c.phase !== "gone");
-        
-        s.owner.pos = moveTowards(s.owner.pos, OWNER_SPAWN, MOVE_SPEED / 2, dt);
+
+        if (s.ownerManualTarget) {
+          const prevX = s.owner.pos.x;
+          s.owner.pos = moveTowards(s.owner.pos, s.ownerManualTarget, MOVE_SPEED, dt);
+          const reachedTarget = distance(s.owner.pos, s.ownerManualTarget) < 4;
+          s.owner.moving = !reachedTarget;
+          if (s.owner.pos.x !== prevX) s.owner.facingLeft = s.owner.pos.x < prevX;
+          if (reachedTarget) {
+            if (s.pendingGateTravel && distance(s.owner.pos, GATE_POS) <= GATE_TRIGGER_DISTANCE) {
+              travelToNextShop();
+              s.owner.pos = { x: GATE_POS.x + 80, y: GATE_POS.y };
+            }
+            s.pendingGateTravel = false;
+            s.ownerManualTarget = undefined;
+          }
+        } else {
+          s.owner.pos = moveTowards(s.owner.pos, OWNER_SPAWN, MOVE_SPEED / 2, dt);
+        }
         s.helpers.forEach(h => {
           h.pos = moveTowards(h.pos, { x: HELPER_SPAWN.x - h.id * 30, y: HELPER_SPAWN.y }, MOVE_SPEED / 2, dt);
         });
@@ -558,11 +684,14 @@ export function RestaurantGamePage() {
   const handleTableClick = (table: TableState) => {
     console.log("Table clicked!", table.state);
     const s = stateRef.current;
-    
+
     // Check if table is already targeted by Owner
     if (s.owner.tasks.some(t => ('tableId' in t) && t.tableId === table.id)) {
       return; // Already handling this table
     }
+
+    s.ownerManualTarget = undefined;
+    s.pendingGateTravel = false;
 
     if (table.state === "waiting" && table.order) {
       const projectedInventory = s.owner.inventory.length + s.owner.tasks.filter(t => t.type === 'grab').length;
@@ -576,6 +705,31 @@ export function RestaurantGamePage() {
     }
   };
 
+  const handleBoardClick = (event: MouseEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const target = {
+      x: (event.clientX - rect.left) / boardScale,
+      y: (event.clientY - rect.top) / boardScale,
+    };
+
+    stateRef.current.owner.tasks = [];
+    stateRef.current.ownerManualTarget = target;
+    stateRef.current.pendingGateTravel = shopCount > 1 && distance(target, GATE_POS) <= GATE_TRIGGER_DISTANCE;
+  };
+
+  const handleGateClick = (event: MouseEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    if (shopCount <= 1) {
+      setMessage("Buy another shop before using the gate.");
+      setTimeout(() => setMessage(""), 2000);
+      return;
+    }
+
+    stateRef.current.owner.tasks = [];
+    stateRef.current.ownerManualTarget = { ...GATE_POS };
+    stateRef.current.pendingGateTravel = true;
+  };
+
   const buyTable = () => {
     const s = stateRef.current;
     if (s.money >= TABLE_COST && s.tables.length < TABLE_POSITIONS.length) {
@@ -585,6 +739,43 @@ export function RestaurantGamePage() {
       s.tables.push({ id: newIndex + 1, pos: TABLE_POSITIONS[newIndex], state: "empty" });
       setTableCount(s.tables.length);
     }
+  };
+
+  const buyShop = () => {
+    const s = stateRef.current;
+    if (s.money >= SHOP_COST) {
+      s.money -= SHOP_COST;
+      s.shopCount += 1;
+      setMoney(s.money);
+      setShopCount(s.shopCount);
+      setMessage(`Bought Shop #${s.shopCount}. Use the gate to visit it.`);
+    }
+  };
+
+  const sellTableForPayroll = () => {
+    const s = stateRef.current;
+    const tableIndex = s.tables.findLastIndex(table => table.state === "empty");
+    if (tableIndex <= 0) {
+      setMessage("No extra empty table is available to sell.");
+      return;
+    }
+
+    s.tables.splice(tableIndex, 1);
+    setTableCount(s.tables.length);
+    settlePayroll(TABLE_SELL_VALUE);
+  };
+
+  const sellShopForPayroll = () => {
+    const s = stateRef.current;
+    if (s.shopCount <= 1) {
+      setMessage("No extra shop is available to sell.");
+      return;
+    }
+
+    s.shopCount -= 1;
+    setShopCount(s.shopCount);
+    setActiveShop(current => Math.min(current, s.shopCount));
+    settlePayroll(SHOP_SELL_VALUE);
   };
 
   const hireHelper = () => {
@@ -604,14 +795,16 @@ export function RestaurantGamePage() {
   };
 
   const s = stateRef.current;
+  const canSellTableForPayroll = payrollDue > 0 && s.tables.some((table, index) => index > 0 && table.state === "empty");
+  const canSellShopForPayroll = payrollDue > 0 && shopCount > 1;
 
   return (
     <div className="flex flex-col h-full min-h-screen bg-gray-900 text-white select-none">
-      
+
       {/* Top UI Bar */}
       <div className="flex flex-wrap justify-between items-center p-4 bg-gray-800 shadow-md z-10">
-        <div className="text-2xl font-bold text-orange-400">🍔 Burger Shop</div>
-        
+        <div className="text-2xl font-bold text-orange-400">🍔 Burger Shop #{activeShop}</div>
+
         <div className="flex items-center gap-6">
           <div className="text-xl font-mono text-green-400 border border-green-500 rounded px-3 py-1">
             💵 ${money}
@@ -619,16 +812,24 @@ export function RestaurantGamePage() {
           <div className="text-xl font-mono">
             ⏱️ {formatTime(timeLeft)}
           </div>
+          <div className="text-sm font-semibold text-zinc-300">
+            Shops {activeShop}/{shopCount}
+          </div>
+          {payrollDue > 0 && (
+            <div className="rounded border border-red-500 bg-red-950/60 px-3 py-1 text-sm font-bold text-red-100">
+              Salary due: ${payrollDue}
+            </div>
+          )}
         </div>
-        
+
         <div className="flex gap-2">
           {!dayRunning && timeLeft > 0 && (
-            <button onClick={startOpeningTest} className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded font-bold transition">
+            <button onClick={startOpeningTest} disabled={payrollDue > 0} className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:hover:bg-blue-600 px-4 py-2 rounded font-bold transition">
               Open Shop
             </button>
           )}
           {!dayRunning && timeLeft <= 0 && (
-            <button onClick={startOpeningTest} className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded font-bold transition">
+            <button onClick={startOpeningTest} disabled={payrollDue > 0} className="bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:hover:bg-green-600 px-4 py-2 rounded font-bold transition">
               Start Next Day
             </button>
           )}
@@ -735,16 +936,43 @@ export function RestaurantGamePage() {
         </div>
       )}
 
+      {payrollDue > 0 && (
+        <div className="flex flex-wrap items-center justify-center gap-3 border-y border-red-500/40 bg-red-950/60 p-3 text-sm text-red-50 shadow-inner z-10">
+          <span className="font-bold">Helper salary still needs ${payrollDue}.</span>
+          <button
+            onClick={sellTableForPayroll}
+            disabled={!canSellTableForPayroll}
+            className="rounded bg-orange-600 px-3 py-2 font-semibold hover:bg-orange-500 disabled:opacity-50 disabled:hover:bg-orange-600"
+          >
+            Sell Table (+${TABLE_SELL_VALUE})
+          </button>
+          <button
+            onClick={sellShopForPayroll}
+            disabled={!canSellShopForPayroll}
+            className="rounded bg-red-600 px-3 py-2 font-semibold hover:bg-red-500 disabled:opacity-50 disabled:hover:bg-red-600"
+          >
+            Sell Shop (+${SHOP_SELL_VALUE})
+          </button>
+        </div>
+      )}
+
       {/* Upgrades Bar */}
-      <div className="flex justify-center gap-4 p-2 bg-gray-700 shadow-inner z-10">
-        <button 
+      <div className="flex flex-wrap justify-center gap-4 p-2 bg-gray-700 shadow-inner z-10">
+        <button
           onClick={buyTable} disabled={money < TABLE_COST || tableCount >= 9}
           className="bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:hover:bg-orange-600 px-4 py-2 rounded transition text-sm flex items-center gap-2"
         >
           <span>🪑 Buy Table (${TABLE_COST})</span>
           <span className="bg-orange-800 px-2 rounded-full">{tableCount}/9</span>
         </button>
-        <button 
+        <button
+          onClick={buyShop} disabled={money < SHOP_COST}
+          className="bg-sky-600 hover:bg-sky-500 disabled:opacity-50 disabled:hover:bg-sky-600 px-4 py-2 rounded transition text-sm flex items-center gap-2"
+        >
+          <span>🏪 Buy Shop (${SHOP_COST})</span>
+          <span className="bg-sky-800 px-2 rounded-full">{shopCount}</span>
+        </button>
+        <button
           onClick={hireHelper} disabled={money < HELPER_COST}
           className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:hover:bg-purple-600 px-4 py-2 rounded transition text-sm flex items-center gap-2"
         >
@@ -755,23 +983,42 @@ export function RestaurantGamePage() {
 
       {/* Game Board Container */}
       <div ref={boardContainerRef} className="flex-1 overflow-hidden flex justify-center items-start p-1 bg-zinc-800">
-        
+
         {/* Scaling wrapper */}
         <div style={{ width: GAME_WIDTH * boardScale, height: GAME_HEIGHT * boardScale }}>
         {/* Game Canvas */}
-        <div 
-          className="relative bg-zinc-900 border-4 border-zinc-700 shadow-2xl rounded-xl overflow-hidden" 
+        <div
+          onClick={handleBoardClick}
+          className="relative cursor-crosshair bg-zinc-900 border-4 border-zinc-700 shadow-2xl rounded-xl overflow-hidden"
           style={{ width: GAME_WIDTH, height: GAME_HEIGHT, transform: `scale(${boardScale})`, transformOrigin: 'top left' }}
         >
           {/* Floor Decor */}
           <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
-          
+
           <div className="absolute top-2 left-2 text-zinc-600 text-sm font-bold uppercase tracking-widest">Queue Area</div>
           <div className="absolute bottom-2 right-2 text-zinc-600 text-sm font-bold uppercase tracking-widest">Kitchen</div>
+          <div className="absolute left-1/2 top-2 -translate-x-1/2 rounded bg-zinc-800/90 px-3 py-1 text-xs font-bold uppercase tracking-widest text-zinc-300">
+            Shop #{activeShop}
+          </div>
+
+          {/* Gate */}
+          <div
+            onClick={handleGateClick}
+            className={`absolute -ml-10 -mt-10 flex h-20 w-20 cursor-pointer flex-col items-center justify-center rounded-t-full border-4 shadow-lg transition ${
+              shopCount > 1
+                ? "border-cyan-400 bg-cyan-900/60 hover:bg-cyan-800/70"
+                : "border-zinc-600 bg-zinc-800/70 opacity-70"
+            }`}
+            style={{ transform: `translate(${GATE_POS.x}px, ${GATE_POS.y}px)` }}
+            title={shopCount > 1 ? "Gate to next shop" : "Buy another shop to unlock travel"}
+          >
+            <span className="text-3xl">🚪</span>
+            <span className="text-[10px] font-bold uppercase text-zinc-100">Gate</span>
+          </div>
 
           {/* Machines */}
           {s.machines.map(m => (
-            <div 
+            <div
               key={`machine-${m.type}`}
               className="absolute w-20 h-20 -ml-10 -mt-10 bg-zinc-700 border-2 border-zinc-500 rounded-lg flex flex-col items-center justify-center shadow-lg"
               style={{ transform: `translate(${MACHINE_POSITIONS[m.type].x}px, ${MACHINE_POSITIONS[m.type].y}px)` }}
@@ -785,9 +1032,9 @@ export function RestaurantGamePage() {
 
           {/* Tables */}
           {s.tables.map(t => (
-            <div 
+            <div
               key={`table-${t.id}`}
-              onClick={() => handleTableClick(t)}
+              onClick={(event) => { event.stopPropagation(); handleTableClick(t); }}
               className={`absolute w-24 h-24 -ml-12 -mt-12 rounded-lg border-4 flex flex-col items-center justify-center cursor-pointer transition-colors ${
                 t.state === 'empty' ? 'bg-zinc-800 border-zinc-600 hover:border-zinc-500' :
                 t.state === 'waiting' ? 'bg-yellow-900/50 border-yellow-600 hover:bg-yellow-800/50' :
@@ -822,7 +1069,7 @@ export function RestaurantGamePage() {
 
           {/* Customers */}
           {s.customers.map(c => (
-            <div 
+            <div
               key={`cust-${c.id}`}
               className="absolute w-10 h-10 -ml-5 -mt-5 flex items-center justify-center z-20"
               style={{ transform: `translate(${c.pos.x}px, ${c.pos.y}px)` }}
@@ -842,7 +1089,7 @@ export function RestaurantGamePage() {
 
           {/* Helpers */}
           {s.helpers.map(h => (
-            <div 
+            <div
               key={`helper-${h.id}`}
               className="absolute w-12 h-12 -ml-6 -mt-6 flex flex-col items-center justify-center z-30"
               style={{ transform: `translate(${h.pos.x}px, ${h.pos.y}px)` }}
@@ -864,7 +1111,7 @@ export function RestaurantGamePage() {
           ))}
 
           {/* Owner */}
-          <div 
+          <div
             className="absolute w-12 h-12 -ml-6 -mt-6 flex flex-col items-center justify-center z-30"
             style={{ transform: `translate(${s.owner.pos.x}px, ${s.owner.pos.y}px)` }}
           >
