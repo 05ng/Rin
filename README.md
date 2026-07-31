@@ -13,28 +13,40 @@ English | [简体中文](./README_zh_CN.md)
 
 ## Introduction
 
-Rin is a modern, serverless blog platform built entirely on Cloudflare's developer platform: Pages for hosting, Workers for serverless functions, D1 for SQLite database, and R2 for object storage. Deploy your personal blog with just a domain name pointed to Cloudflare—no server management required.
+This repository is a fork of the original open-source [Rin](https://github.com/openRin/Rin) project. It keeps Rin's Cloudflare-first, serverless blog foundation while extending it for Agentic Life with stronger administrator security, richer search, multilingual article workflows, article SEO, and extra interactive pages.
+
+Rin is a modern blog platform built on Cloudflare's developer platform: Pages for hosting, Workers for serverless functions, D1 for SQLite database, R2/S3-compatible object storage, Workers AI, Vectorize, and project-local CLI tooling. Deploy a personal or technical blog with a domain pointed to Cloudflare, without managing a traditional server.
 
 ## Live Demo
 
-https://xeu.life
+https://agenticlife.org
 
-## Features
+## Fork Highlights
 
-- **Authentication & Management**: GitHub OAuth login. The first registered user becomes an administrator, while subsequent users join as regular members.
-- **Content Creation**: Write and edit articles with a rich, intuitive editor.
-- **Real-time Autosave**: Local drafts are saved automatically in real-time, with isolation between different articles.
-- **Privacy Control**: Mark articles as "Visible only to me" for private drafts or personal notes, synchronized across devices.
-- **Image Management**: Drag-and-drop or paste images to upload directly to S3-compatible storage (e.g., Cloudflare R2), with automatic link generation.
-- **Custom Slugs**: Assign friendly URLs like `https://yourblog.com/about` using custom article aliases.
-- **Unlisted Posts**: Option to keep articles out of the public homepage listing.
-- **Blogroll**: Add links to friends' blogs. The backend automatically checks link availability every 20 minutes.
-- **Comment System**: Reply to comments or moderate them with delete functionality.
-- **Webhook Notifications**: Receive real-time alerts for new comments via configurable webhooks.
-- **Featured Images**: Automatically detect the first image in an article and use it as the cover image in listings.
-- **Tag Parsing**: Input tags like `#Blog #Cloudflare` and have them automatically parsed and displayed.
-- **Type Safety**: End-to-end type safety with shared TypeScript types between client and server via `@rin/api` package.
-- ...and more! Explore all features at https://xeu.life.
+- **Forked from Rin**: Built from the original open-source Rin project, with this fork focused on Agentic Life production needs and additional platform features.
+- **Administrator MFA**: Admin login can require TOTP-based multi-factor authentication, including MFA challenge handling for administrator OAuth flows.
+- **AI summaries**: Published articles can be queued for AI-generated summaries. Summary prompts now respect article language, so English articles receive English summaries and Simplified Chinese articles receive Simplified Chinese summaries.
+- **Semantic article search**: Articles can be chunked, embedded, and indexed with Cloudflare Vectorize to support semantic search alongside keyword search.
+- **Article vector status**: Admin and article views can expose whether an article has been vectorized, making backfill and operational checks easier.
+- **Games and tools**: The frontend includes interactive utility pages and games in addition to the core blog experience.
+- **SEO workflows**: Article publishing, updating, and deletion can trigger SEO workflows. Article pages emit canonical URLs, alternate language links, structured article metadata, and crawler-friendly prerendered output.
+- **Multilingual article model**: Articles have explicit language metadata, language-aware feeds/search/timeline, and translation groups for linking equivalent articles across languages.
+- **Language-specific URLs**: English remains the default URI shape, for example `/my-article`; non-default languages get their own stable URL prefix, for example `/zh-CN/my-article`.
+- **Linked translations**: The article page can show available translations and switch readers to the matching article in another language.
+
+## Core Features
+
+- **Authentication & Management**: GitHub OAuth, username/password login, administrator roles, and optional MFA for administrator access.
+- **Content Creation**: Write and edit articles with a rich editor, autosave, tags, custom slugs, draft/private visibility, and unlisted posts.
+- **Image Management**: Drag-and-drop or paste images to upload directly to S3-compatible storage such as Cloudflare R2, with generated links and featured-image detection.
+- **AI-assisted publishing**: Automatic AI summary generation can run after publishing, with queue status and compatibility backfill tooling.
+- **Search**: Keyword search is combined with Vectorize-backed semantic search, language filters, and configurable vector score thresholds.
+- **Internationalization**: English and Simplified Chinese article routing, article-language filters, linked translation groups, and language-aware AI summaries.
+- **SEO**: Canonical URLs, hreflang alternates, sitemap support, social preview metadata, structured data, and prerendered crawler responses.
+- **Blogroll**: Add links to friends' blogs, with periodic backend availability checks.
+- **Comment System**: Authenticated and guest comments, moderation controls, and webhook notifications.
+- **Games and Tools**: Extra interactive pages for lightweight tools and browser games.
+- **Type Safety**: Shared TypeScript contracts between client and server through the `@rin/api` package.
 
 ## Documentation
 
@@ -42,7 +54,7 @@ https://xeu.life
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/openRin/Rin.git && cd Rin
+git clone https://github.com/05ng/Rin.git && cd Rin
 
 # 2. Install dependencies
 bun install
@@ -129,13 +141,15 @@ The repository includes several automated workflows:
 
 Full documentation is available at https://docs.openrin.org.
 
-## Community & Support
+## Fork, Upstream & Support
 
-- Join our https://discord.gg/JWbSTHvAPN for discussions and help.
-- Follow updates on https://t.me/openRin.
-- Found a bug or have a feature request? Please open an issue on GitHub.
+- This fork: https://github.com/05ng/Rin
+- Original Rin project: https://github.com/openRin/Rin
+- Upstream documentation: https://docs.openrin.org
+- Upstream community: https://discord.gg/JWbSTHvAPN and https://t.me/openRin
+- Found a bug or have a feature request for this fork? Open an issue in this repository.
 
-## Star History
+## Upstream Star History
 
 <a href="https://star-history.com/#openRin/Rin&Date">
  <picture>
@@ -147,7 +161,7 @@ Full documentation is available at https://docs.openrin.org.
 
 ## Contributing
 
-We welcome contributions of all kinds—code, documentation, design, and ideas. Please check out our [contributing guidelines](https://docs.openrin.org/en/guide/contribution.html) and join us in building Rin together!
+Contributions to this fork should target the fork repository. For changes intended for the original Rin project, see the upstream [contributing guidelines](https://docs.openrin.org/en/guide/contribution.html).
 
 ## License
 
