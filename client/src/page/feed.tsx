@@ -232,8 +232,8 @@ export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?
                 className="rounded-2xl bg-w m-2 px-6 py-4"
                 aria-label={feed.title ?? "Unnamed"}
               >
-                <div className="flex justify-between">
-                  <div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+                  <div className="min-w-0 w-full">
                     <div className="mt-1 mb-1 flex gap-1">
                       <p
                         className="text-gray-400 text-[12px]"
@@ -266,11 +266,10 @@ export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?
                         {feed.uv}
                       </span>
                     </p>}
-                    <div className="flex flex-row items-center">
-                      <h1 className="text-xl font-bold t-primary break-all sm:text-2xl">
+                    <div className="w-full">
+                      <h1 className="w-full text-xl font-bold t-primary break-all sm:text-2xl">
                         {feed.title}
                       </h1>
-                      <div className="flex-1 w-0" />
                     </div>
                     <ArticleVectorBadge vectorized={feed.vectorized} />
                     <nav className="mt-3 flex flex-wrap items-center gap-2" aria-label={t("article.translation_switch")}>
@@ -289,7 +288,7 @@ export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?
                       ))}
                     </nav>
                   </div>
-                  <div className="pt-2">
+                  <div className="flex justify-end pt-0 sm:pt-2">
                     {profile?.permission && (
                       <div className="flex gap-2">
                         <button
