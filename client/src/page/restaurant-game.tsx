@@ -313,16 +313,14 @@ export function RestaurantGamePage() {
     }, 0);
     const wrong = MATH_QUESTION_COUNT - correct;
 
-    if (correct < MIN_CORRECT_TO_OPEN) {
-      setMathGate(current => ({
-        ...current,
-        result: { correct, wrong, openingSeconds: null },
-      }));
-      return;
-    }
+    const openingSeconds = correct >= MIN_CORRECT_TO_OPEN
+      ? wrong === 0 ? PERFECT_DAY_LENGTH_SECONDS : SHORT_DAY_LENGTH_SECONDS
+      : null;
 
-    const openingSeconds = wrong === 0 ? PERFECT_DAY_LENGTH_SECONDS : SHORT_DAY_LENGTH_SECONDS;
-    openShopFor(openingSeconds);
+    setMathGate(current => ({
+      ...current,
+      result: { correct, wrong, openingSeconds },
+    }));
   };
 
   const saveProgress = async () => {
@@ -686,9 +684,16 @@ export function RestaurantGamePage() {
               })}
             </div>
 
-            {mathGate.result && mathGate.result.openingSeconds === null && (
-              <div className="mt-4 rounded border border-red-500/40 bg-red-950/40 px-4 py-3 text-sm text-red-100">
-                Score: {mathGate.result.correct}/10. The shop cannot open with {mathGate.result.wrong} wrong answers. Try a new set until you get at least 8 correct.
+            {mathGate.result && (
+              <div className={mathGate.result.openingSeconds === null
+                ? "mt-4 rounded border border-red-500/40 bg-red-950/40 px-4 py-3 text-sm text-red-100"
+                : "mt-4 rounded border border-green-500/40 bg-green-950/40 px-4 py-3 text-sm text-green-100"
+              }>
+                {mathGate.result.openingSeconds === null ? (
+                  <>Score: {mathGate.result.correct}/10. The shop cannot open with {mathGate.result.wrong} wrong answers. Try a new set until you get at least 8 correct.</>
+                ) : (
+                  <>Score: {mathGate.result.correct}/10. The shop can open for {formatTime(mathGate.result.openingSeconds)}. Review your answers, then open the shop.</>
+                )}
               </div>
             )}
 
@@ -700,7 +705,15 @@ export function RestaurantGamePage() {
               >
                 Cancel
               </button>
-              {mathGate.result?.openingSeconds === null ? (
+              {mathGate.result === null ? (
+                <button
+                  type="button"
+                  onClick={submitOpeningTest}
+                  className="rounded bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-500"
+                >
+                  Submit Answers
+                </button>
+              ) : mathGate.result.openingSeconds === null ? (
                 <button
                   type="button"
                   onClick={retryOpeningTest}
@@ -711,10 +724,10 @@ export function RestaurantGamePage() {
               ) : (
                 <button
                   type="button"
-                  onClick={submitOpeningTest}
+                  onClick={() => openShopFor(mathGate.result!.openingSeconds!)}
                   className="rounded bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-500"
                 >
-                  Submit and Open
+                  Open Shop
                 </button>
               )}
             </div>
