@@ -267,7 +267,7 @@ export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?
                       </span>
                     </p>}
                     <div className="flex flex-row items-center">
-                      <h1 className="text-2xl font-bold t-primary break-all">
+                      <h1 className="text-xl font-bold t-primary break-all sm:text-2xl">
                         {feed.title}
                       </h1>
                       <div className="flex-1 w-0" />
