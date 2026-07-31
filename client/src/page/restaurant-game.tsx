@@ -5,7 +5,12 @@ import { ProfileContext } from "../state/profile";
 type OrderType = "burger" | "hotdog" | "icecream" | "coffee";
 
 // --- Game Constants & Coordinates ---
-const DAY_LENGTH_SECONDS = 480;
+const PERFECT_DAY_LENGTH_SECONDS = 480;
+const SHORT_DAY_LENGTH_SECONDS = 180;
+const INITIAL_DAY_LENGTH_SECONDS = PERFECT_DAY_LENGTH_SECONDS;
+const MATH_QUESTION_COUNT = 10;
+const MATH_MAX_NUMBER = 20;
+const MIN_CORRECT_TO_OPEN = 8;
 const GAME_WIDTH = 800;
 const GAME_HEIGHT = 500;
 const MOVE_SPEED = 150; // pixels per second
@@ -79,6 +84,27 @@ type MachineState = {
   timer: number; // time until next stock
 };
 
+type MathQuestion = {
+  id: number;
+  left: number;
+  right: number;
+  operator: "+" | "-";
+  answer: number;
+};
+
+type MathGateResult = {
+  correct: number;
+  wrong: number;
+  openingSeconds: number | null;
+};
+
+type MathGateState = {
+  isOpen: boolean;
+  questions: MathQuestion[];
+  answers: string[];
+  result: MathGateResult | null;
+};
+
 // --- Helper Functions ---
 function distance(p1: Pos, p2: Pos) {
   return Math.hypot(p1.x - p2.x, p1.y - p2.y);
@@ -97,14 +123,55 @@ function getQueuePos(index: number): Pos {
   return { x: 50, y: 150 + index * 60 };
 }
 
+function randomInt(maxInclusive: number) {
+  return Math.floor(Math.random() * (maxInclusive + 1));
+}
+
+function generateMathQuestion(id: number): MathQuestion {
+  const operator = Math.random() < 0.5 ? "+" : "-";
+
+  if (operator === "+") {
+    const left = randomInt(MATH_MAX_NUMBER);
+    const right = randomInt(MATH_MAX_NUMBER - left);
+    return { id, left, right, operator, answer: left + right };
+  }
+
+  const left = randomInt(MATH_MAX_NUMBER);
+  const right = randomInt(left);
+  return { id, left, right, operator, answer: left - right };
+}
+
+function generateOpeningTestQuestions() {
+  return Array.from({ length: MATH_QUESTION_COUNT }, (_, index) => generateMathQuestion(index + 1));
+}
+
+function createOpeningTestState(): MathGateState {
+  return {
+    isOpen: true,
+    questions: generateOpeningTestQuestions(),
+    answers: Array.from({ length: MATH_QUESTION_COUNT }, () => ""),
+    result: null,
+  };
+}
+
+function closedMathGateState(): MathGateState {
+  return {
+    isOpen: false,
+    questions: [],
+    answers: [],
+    result: null,
+  };
+}
+
 export function RestaurantGamePage() {
   const profile = useContext(ProfileContext);
   
   // High-level state
   const [money, setMoney] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(DAY_LENGTH_SECONDS);
+  const [timeLeft, setTimeLeft] = useState(INITIAL_DAY_LENGTH_SECONDS);
   const [dayRunning, setDayRunning] = useState(false);
   const [message, setMessage] = useState("");
+  const [mathGate, setMathGate] = useState<MathGateState>(() => closedMathGateState());
   
   // Game Entities Refs (mutable for loop)
   const stateRef = useRef({
@@ -200,6 +267,63 @@ export function RestaurantGamePage() {
       load();
     }
   }, [profile]);
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
+
+  const openShopFor = (seconds: number) => {
+    setTimeLeft(seconds);
+    setDayRunning(true);
+    setMathGate(closedMathGateState());
+    setMessage(`Shop opened for ${formatTime(seconds)}!`);
+    setTimeout(() => setMessage(""), 2000);
+  };
+
+  const startOpeningTest = () => {
+    if (dayRunning) return;
+    setMessage("");
+    setMathGate(createOpeningTestState());
+  };
+
+  const updateOpeningTestAnswer = (index: number, value: string) => {
+    if (!/^-?\d*$/.test(value)) return;
+    setMathGate(current => {
+      const nextAnswers = [...current.answers];
+      nextAnswers[index] = value;
+      return { ...current, answers: nextAnswers, result: null };
+    });
+  };
+
+  const retryOpeningTest = () => {
+    setMathGate(createOpeningTestState());
+  };
+
+  const submitOpeningTest = () => {
+    if (mathGate.answers.some(answer => answer.trim() === "")) {
+      setMessage("Answer all 10 questions before opening the shop.");
+      setTimeout(() => setMessage(""), 2000);
+      return;
+    }
+
+    const correct = mathGate.questions.reduce((count, question, index) => {
+      return Number(mathGate.answers[index]) === question.answer ? count + 1 : count;
+    }, 0);
+    const wrong = MATH_QUESTION_COUNT - correct;
+
+    if (correct < MIN_CORRECT_TO_OPEN) {
+      setMathGate(current => ({
+        ...current,
+        result: { correct, wrong, openingSeconds: null },
+      }));
+      return;
+    }
+
+    const openingSeconds = wrong === 0 ? PERFECT_DAY_LENGTH_SECONDS : SHORT_DAY_LENGTH_SECONDS;
+    openShopFor(openingSeconds);
+  };
 
   const saveProgress = async () => {
     const st = { money: stateRef.current.money, helpers: stateRef.current.helpersCount, tables: stateRef.current.tables.length };
@@ -481,12 +605,6 @@ export function RestaurantGamePage() {
     }
   };
 
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  };
-
   const s = stateRef.current;
 
   return (
@@ -506,14 +624,14 @@ export function RestaurantGamePage() {
         </div>
         
         <div className="flex gap-2">
-          {!dayRunning && timeLeft === DAY_LENGTH_SECONDS && (
-            <button onClick={() => setDayRunning(true)} className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded font-bold transition">
-              ▶️ Open Shop
+          {!dayRunning && timeLeft > 0 && (
+            <button onClick={startOpeningTest} className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded font-bold transition">
+              Open Shop
             </button>
           )}
           {!dayRunning && timeLeft <= 0 && (
-            <button onClick={() => { setTimeLeft(DAY_LENGTH_SECONDS); setDayRunning(true); }} className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded font-bold transition">
-              🌅 Start Next Day
+            <button onClick={startOpeningTest} className="bg-green-600 hover:bg-green-500 px-4 py-2 rounded font-bold transition">
+              Start Next Day
             </button>
           )}
           <button onClick={saveProgress} className="bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded transition text-sm">
@@ -523,6 +641,86 @@ export function RestaurantGamePage() {
       </div>
 
       {message && <div className="absolute top-20 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-4 py-2 rounded shadow z-20 animate-pulse">{message}</div>}
+
+      {mathGate.isOpen && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/75 p-4">
+          <div className="w-full max-w-3xl max-h-[calc(100vh-2rem)] overflow-y-auto rounded-lg border border-orange-500/40 bg-zinc-900 p-5 shadow-2xl">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-orange-300">Opening Math Test</h2>
+                <p className="mt-1 text-sm text-zinc-300">
+                  Answer 10 plus/minus questions using numbers within 20. Perfect score opens for 8:00. One or two mistakes opens for 3:00. Three mistakes keeps the shop closed.
+                </p>
+              </div>
+              <div className="shrink-0 rounded bg-zinc-800 px-3 py-2 text-sm font-semibold text-zinc-200">
+                Need {MIN_CORRECT_TO_OPEN}/10 correct
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {mathGate.questions.map((question, index) => {
+                const answerValue = mathGate.answers[index] ?? "";
+                const submitted = Boolean(mathGate.result);
+                const answeredCorrectly = submitted && Number(answerValue) === question.answer;
+                return (
+                  <label key={question.id} className="flex items-center justify-between gap-3 rounded border border-zinc-700 bg-zinc-800 px-3 py-2">
+                    <span className="min-w-0 text-lg font-semibold text-zinc-100">
+                      {question.id}. {question.left} {question.operator} {question.right} =
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        inputMode="numeric"
+                        value={answerValue}
+                        onChange={event => updateOpeningTestAnswer(index, event.target.value)}
+                        className="h-10 w-20 rounded border border-zinc-600 bg-zinc-950 px-3 text-center text-lg font-bold text-white outline-none focus:border-orange-400"
+                        aria-label={`Answer for question ${question.id}`}
+                      />
+                      {submitted && answerValue.trim() !== "" && (
+                        <span className={answeredCorrectly ? "text-green-400" : "text-red-400"}>
+                          {answeredCorrectly ? "OK" : question.answer}
+                        </span>
+                      )}
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+
+            {mathGate.result && mathGate.result.openingSeconds === null && (
+              <div className="mt-4 rounded border border-red-500/40 bg-red-950/40 px-4 py-3 text-sm text-red-100">
+                Score: {mathGate.result.correct}/10. The shop cannot open with {mathGate.result.wrong} wrong answers. Try a new set until you get at least 8 correct.
+              </div>
+            )}
+
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setMathGate(closedMathGateState())}
+                className="rounded border border-zinc-600 px-4 py-2 text-sm font-semibold text-zinc-200 hover:bg-zinc-800"
+              >
+                Cancel
+              </button>
+              {mathGate.result?.openingSeconds === null ? (
+                <button
+                  type="button"
+                  onClick={retryOpeningTest}
+                  className="rounded bg-orange-600 px-4 py-2 text-sm font-bold text-white hover:bg-orange-500"
+                >
+                  Retry New Questions
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={submitOpeningTest}
+                  className="rounded bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-500"
+                >
+                  Submit and Open
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Upgrades Bar */}
       <div className="flex justify-center gap-4 p-2 bg-gray-700 shadow-inner z-10">
