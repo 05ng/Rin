@@ -26,8 +26,18 @@ export const WORKER_AI_MODELS: Record<string, string> = {
     "qwen-7b": "@cf/qwen/qwen1.5-7b-chat-awq",
 };
 
-export const AI_SUMMARY_SYSTEM_PROMPT =
-    "你是一个中文内容摘要助手。请用简洁、准确、自然的中文总结用户提供的内容，不超过200字，不要添加原文没有的信息，不要输出标题或项目符号。";
+export const AI_SUMMARY_SYSTEM_PROMPTS = {
+    en: "You are a concise article summary assistant. Summarize the user's content in clear, natural English in no more than 200 words. Do not add information that is not in the original content. Do not output a title or bullet points.",
+    "zh-CN": "你是一个简体中文内容摘要助手。请用简洁、准确、自然的简体中文总结用户提供的内容，不超过200字，不要添加原文没有的信息，不要输出标题或项目符号。",
+} as const;
+
+export const AI_SUMMARY_SYSTEM_PROMPT = AI_SUMMARY_SYSTEM_PROMPTS.en;
+
+export function getAISummarySystemPrompt(language: string = "en") {
+    return language === "zh-CN"
+        ? AI_SUMMARY_SYSTEM_PROMPTS["zh-CN"]
+        : AI_SUMMARY_SYSTEM_PROMPTS.en;
+}
 
 
 /**
@@ -203,16 +213,18 @@ export async function testAIModel(
 export async function generateAISummary(
     env: Env, 
     serverConfig: ConfigReader,
-    content: string
+    content: string,
+    language: string = "en",
 ): Promise<string | null> {
-    const result = await generateAISummaryResult(env, serverConfig, content);
+    const result = await generateAISummaryResult(env, serverConfig, content, language);
     return result.summary;
 }
 
 export async function generateAISummaryResult(
     env: Env,
     serverConfig: ConfigReader,
-    content: string
+    content: string,
+    language: string = "en",
 ): Promise<{ summary: string | null; skipped: boolean; error?: string }> {
     const config = await getAIConfig(serverConfig);
 
@@ -226,7 +238,7 @@ export async function generateAISummaryResult(
         ? content.slice(0, maxContentLength) + "..."
         : content;
     const summaryMessages = [
-        { role: "system" as const, content: AI_SUMMARY_SYSTEM_PROMPT },
+        { role: "system" as const, content: getAISummarySystemPrompt(language) },
         { role: "user" as const, content: truncatedContent },
     ];
 

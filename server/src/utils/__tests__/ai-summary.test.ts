@@ -53,7 +53,7 @@ describe("generateAISummaryResult", () => {
     });
 
     const calls: Array<any> = [];
-    const { AI_SUMMARY_SYSTEM_PROMPT, generateAISummaryResult } = await import("../ai");
+    const { getAISummarySystemPrompt, generateAISummaryResult } = await import("../ai");
 
     const result = await generateAISummaryResult({
       AI: {
@@ -68,7 +68,7 @@ describe("generateAISummaryResult", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].messages[0]).toEqual({
       role: "system",
-      content: AI_SUMMARY_SYSTEM_PROMPT,
+      content: getAISummarySystemPrompt("en"),
     });
     expect(calls[0].messages[1]).toEqual({
       role: "user",
@@ -96,16 +96,16 @@ describe("generateAISummaryResult", () => {
       });
     }) as typeof fetch;
 
-    const { AI_SUMMARY_SYSTEM_PROMPT, generateAISummaryResult } = await import("../ai");
+    const { getAISummarySystemPrompt, generateAISummaryResult } = await import("../ai");
 
-    const result = await generateAISummaryResult({} as Env, serverConfig, "external content");
+    const result = await generateAISummaryResult({} as Env, serverConfig, "external content", "zh-CN");
 
     expect(result.summary).toBe("summary");
     expect(requests).toHaveLength(1);
     const body = JSON.parse(String(requests[0].body));
     expect(body.messages[0]).toEqual({
       role: "system",
-      content: AI_SUMMARY_SYSTEM_PROMPT,
+      content: getAISummarySystemPrompt("zh-CN"),
     });
     expect(body.messages[1]).toEqual({
       role: "user",

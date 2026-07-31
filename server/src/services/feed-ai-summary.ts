@@ -158,7 +158,7 @@ export async function processFeedAISummaryTask(
     .set(buildStatusUpdate("processing"))
     .where(eq(feeds.id, feed.id));
 
-  const result = await generateAISummaryResult(env, serverConfig, feed.content);
+  const result = await generateAISummaryResult(env, serverConfig, feed.content, feed.language);
   if (result.summary) {
     await db
       .update(feeds)

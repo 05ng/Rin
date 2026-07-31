@@ -716,9 +716,10 @@ export function FeedService(): Hono<{
         }
 
         const contentChanged = content && content !== feed.content;
+        const languageChanged = language !== feed.language;
         const isDraft = draft !== undefined ? draft : (feed.draft === 1);
         const isListed = listed !== undefined ? listed : (feed.listed === 1);
-        const shouldQueueAISummary = (contentChanged && !isDraft) || (!isDraft && feed.draft === 1 && !feed.ai_summary);
+        const shouldQueueAISummary = ((contentChanged || languageChanged) && !isDraft) || (!isDraft && feed.draft === 1 && !feed.ai_summary);
         const updateTime = new Date();
 
         await profileAsync(c, 'feed_update_db', () => db.update(feeds).set({
