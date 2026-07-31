@@ -20,6 +20,7 @@ const TABLE_COST = 50;
 const HELPER_COST = 60;
 const SHOP_COST = 200;
 const HELPER_DAILY_SALARY = 20;
+const RESTAURANT_GAME_STATE_KEY = "restaurant_game_state";
 
 const TABLE_SELL_VALUE = TABLE_COST;
 const SHOP_SELL_VALUE = SHOP_COST;
@@ -210,6 +211,19 @@ function normalizeSavedRestaurantGameState(raw: unknown): SavedRestaurantGameSta
   };
 }
 
+function loadLocalRestaurantGameState() {
+  try {
+    const saved = localStorage.getItem(RESTAURANT_GAME_STATE_KEY);
+    return saved ? normalizeSavedRestaurantGameState(JSON.parse(saved)) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLocalRestaurantGameState(state: SavedRestaurantGameState) {
+  localStorage.setItem(RESTAURANT_GAME_STATE_KEY, JSON.stringify(state));
+}
+
 export function RestaurantGamePage() {
   const profile = useContext(ProfileContext);
 
@@ -250,6 +264,7 @@ export function RestaurantGamePage() {
   const [payrollDue, setPayrollDue] = useState(0);
 
   const savedStateLoaded = useRef(false);
+  const remoteStateLoaded = useRef(false);
   const boardContainerRef = useRef<HTMLDivElement>(null);
   const [boardScale, setBoardScale] = useState(1);
 
@@ -269,53 +284,52 @@ export function RestaurantGamePage() {
 
   // Initialize
   useEffect(() => {
-    if (profile !== undefined && !savedStateLoaded.current) {
-      const load = async () => {
-        let loadedState = normalizeSavedRestaurantGameState(null);
-
-        if (profile) {
-          try {
-            const res = await client.game?.loadRestaurantState();
-            if (res?.data) {
-              loadedState = normalizeSavedRestaurantGameState(res.data);
-            }
-          } catch (e) {}
-        } else {
-          const saved = localStorage.getItem("restaurant_game_state");
-          if (saved) {
-             try {
-               loadedState = normalizeSavedRestaurantGameState(JSON.parse(saved));
-             } catch (e) {}
-          }
-        }
-
-        setMoney(loadedState.money);
-        setTableCount(loadedState.tables);
-        setHelperCount(loadedState.helpers);
-        setShopCount(loadedState.shops);
-        setActiveShop(loadedState.activeShop);
-        setPayrollDue(loadedState.payrollDue);
-
-        stateRef.current.money = loadedState.money;
-        stateRef.current.helpersCount = loadedState.helpers;
-        stateRef.current.shopCount = loadedState.shops;
-        stateRef.current.tables = Array.from({ length: loadedState.tables }).map((_, i) => ({
-          id: i + 1,
-          pos: TABLE_POSITIONS[i],
-          state: "empty"
-        }));
-        stateRef.current.helpers = Array.from({ length: loadedState.helpers }).map((_, i) => ({
-          id: i + 1,
-          pos: { x: HELPER_SPAWN.x - i * 30, y: HELPER_SPAWN.y },
-          inventory: [],
-          tasks: []
-        }));
-
-        savedStateLoaded.current = true;
-        setRenderTrigger(v => v + 1);
-      };
-      load();
+    if (savedStateLoaded.current && (!profile || remoteStateLoaded.current)) {
+      return;
     }
+
+    const load = async () => {
+      const localState = loadLocalRestaurantGameState();
+      let loadedState = localState ?? normalizeSavedRestaurantGameState(null);
+
+      if (profile && !remoteStateLoaded.current) {
+        try {
+          const res = await client.game?.loadRestaurantState();
+          if (res?.data) {
+            loadedState = normalizeSavedRestaurantGameState(res.data);
+            saveLocalRestaurantGameState(loadedState);
+          }
+        } catch (e) {}
+        remoteStateLoaded.current = true;
+      }
+
+      setMoney(loadedState.money);
+      setTableCount(loadedState.tables);
+      setHelperCount(loadedState.helpers);
+      setShopCount(loadedState.shops);
+      setActiveShop(loadedState.activeShop);
+      setPayrollDue(loadedState.payrollDue);
+
+      stateRef.current.money = loadedState.money;
+      stateRef.current.helpersCount = loadedState.helpers;
+      stateRef.current.shopCount = loadedState.shops;
+      stateRef.current.tables = Array.from({ length: loadedState.tables }).map((_, i) => ({
+        id: i + 1,
+        pos: TABLE_POSITIONS[i],
+        state: "empty"
+      }));
+      stateRef.current.helpers = Array.from({ length: loadedState.helpers }).map((_, i) => ({
+        id: i + 1,
+        pos: { x: HELPER_SPAWN.x - i * 30, y: HELPER_SPAWN.y },
+        inventory: [],
+        tasks: []
+      }));
+
+      savedStateLoaded.current = true;
+      setRenderTrigger(v => v + 1);
+    };
+
+    load();
   }, [profile]);
 
   const formatTime = (seconds: number) => {
@@ -379,7 +393,7 @@ export function RestaurantGamePage() {
   };
 
   const saveProgress = async () => {
-    const st = {
+    const st: SavedRestaurantGameState = {
       money: stateRef.current.money,
       helpers: stateRef.current.helpersCount,
       tables: Math.min(stateRef.current.tables.length, TABLE_POSITIONS.length),
@@ -387,11 +401,12 @@ export function RestaurantGamePage() {
       activeShop: Math.min(Math.max(1, activeShop), Math.max(1, stateRef.current.shopCount)),
       payrollDue: Math.max(0, payrollDue),
     };
+    saveLocalRestaurantGameState(st);
+
     if (profile) {
-      await client.game?.saveRestaurantState(st);
-      setMessage("Game saved!");
+      const res = await client.game?.saveRestaurantState(st);
+      setMessage(res?.error ? "Game saved locally. Remote save failed." : "Game saved!");
     } else {
-      localStorage.setItem("restaurant_game_state", JSON.stringify(st));
       setMessage("Game saved locally!");
     }
     setTimeout(() => setMessage(""), 2000);
