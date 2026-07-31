@@ -171,6 +171,45 @@ function closedMathGateState(): MathGateState {
   };
 }
 
+type SavedRestaurantGameState = {
+  money: number;
+  tables: number;
+  helpers: number;
+  shops: number;
+  activeShop: number;
+  payrollDue: number;
+};
+
+function readSavedNumber(value: unknown, fallback: number, min: number, max = Number.MAX_SAFE_INTEGER) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(Math.floor(parsed), min), max);
+}
+
+function normalizeSavedRestaurantGameState(raw: unknown): SavedRestaurantGameState {
+  const source = raw && typeof raw === "object"
+    && "data" in raw
+    && (raw as { data?: unknown }).data
+    && typeof (raw as { data?: unknown }).data === "object"
+    ? (raw as { data: unknown }).data
+    : raw;
+
+  const state = source && typeof source === "object"
+    ? source as Record<string, unknown>
+    : {};
+
+  const shops = readSavedNumber(state.shops, 1, 1);
+
+  return {
+    money: readSavedNumber(state.money, 0, 0),
+    tables: readSavedNumber(state.tables, 1, 1, TABLE_POSITIONS.length),
+    helpers: readSavedNumber(state.helpers, 0, 0),
+    shops,
+    activeShop: readSavedNumber(state.activeShop, 1, 1, shops),
+    payrollDue: readSavedNumber(state.payrollDue, 0, 0),
+  };
+}
+
 export function RestaurantGamePage() {
   const profile = useContext(ProfileContext);
 
@@ -232,60 +271,40 @@ export function RestaurantGamePage() {
   useEffect(() => {
     if (profile !== undefined && !savedStateLoaded.current) {
       const load = async () => {
-        let loadedMoney = 0;
-        let loadedTables = 1;
-        let loadedHelpers = 0;
-        let loadedShops = 1;
-        let loadedActiveShop = 1;
-        let loadedPayrollDue = 0;
+        let loadedState = normalizeSavedRestaurantGameState(null);
 
         if (profile) {
           try {
             const res = await client.game?.loadRestaurantState();
             if (res?.data) {
-              loadedMoney = res.data.money;
-              loadedTables = res.data.tables;
-              loadedHelpers = res.data.helpers;
-              loadedShops = res.data.shops || 1;
-              loadedActiveShop = res.data.activeShop || 1;
-              loadedPayrollDue = res.data.payrollDue || 0;
+              loadedState = normalizeSavedRestaurantGameState(res.data);
             }
           } catch (e) {}
         } else {
           const saved = localStorage.getItem("restaurant_game_state");
           if (saved) {
              try {
-               const data = JSON.parse(saved);
-               loadedMoney = data.money || 0;
-               loadedTables = data.tables || 1;
-               loadedHelpers = data.helpers || 0;
-               loadedShops = data.shops || 1;
-               loadedActiveShop = data.activeShop || 1;
-               loadedPayrollDue = data.payrollDue || 0;
+               loadedState = normalizeSavedRestaurantGameState(JSON.parse(saved));
              } catch (e) {}
           }
         }
 
-        loadedShops = Math.max(1, loadedShops);
-        loadedActiveShop = Math.min(Math.max(1, loadedActiveShop), loadedShops);
-        loadedPayrollDue = Math.max(0, loadedPayrollDue);
+        setMoney(loadedState.money);
+        setTableCount(loadedState.tables);
+        setHelperCount(loadedState.helpers);
+        setShopCount(loadedState.shops);
+        setActiveShop(loadedState.activeShop);
+        setPayrollDue(loadedState.payrollDue);
 
-        setMoney(loadedMoney);
-        setTableCount(loadedTables);
-        setHelperCount(loadedHelpers);
-        setShopCount(loadedShops);
-        setActiveShop(loadedActiveShop);
-        setPayrollDue(loadedPayrollDue);
-
-        stateRef.current.money = loadedMoney;
-        stateRef.current.helpersCount = loadedHelpers;
-        stateRef.current.shopCount = loadedShops;
-        stateRef.current.tables = Array.from({ length: Math.max(1, loadedTables) }).map((_, i) => ({
+        stateRef.current.money = loadedState.money;
+        stateRef.current.helpersCount = loadedState.helpers;
+        stateRef.current.shopCount = loadedState.shops;
+        stateRef.current.tables = Array.from({ length: loadedState.tables }).map((_, i) => ({
           id: i + 1,
           pos: TABLE_POSITIONS[i],
           state: "empty"
         }));
-        stateRef.current.helpers = Array.from({ length: loadedHelpers }).map((_, i) => ({
+        stateRef.current.helpers = Array.from({ length: loadedState.helpers }).map((_, i) => ({
           id: i + 1,
           pos: { x: HELPER_SPAWN.x - i * 30, y: HELPER_SPAWN.y },
           inventory: [],
@@ -363,10 +382,10 @@ export function RestaurantGamePage() {
     const st = {
       money: stateRef.current.money,
       helpers: stateRef.current.helpersCount,
-      tables: stateRef.current.tables.length,
-      shops: stateRef.current.shopCount,
-      activeShop,
-      payrollDue,
+      tables: Math.min(stateRef.current.tables.length, TABLE_POSITIONS.length),
+      shops: Math.max(1, stateRef.current.shopCount),
+      activeShop: Math.min(Math.max(1, activeShop), Math.max(1, stateRef.current.shopCount)),
+      payrollDue: Math.max(0, payrollDue),
     };
     if (profile) {
       await client.game?.saveRestaurantState(st);
