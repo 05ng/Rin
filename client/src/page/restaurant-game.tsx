@@ -18,8 +18,10 @@ const MOVE_SPEED = 150; // pixels per second
 
 const TABLE_COST = 50;
 const HELPER_COST = 60;
+const CASHIER_COST = 40;
 const SHOP_COST = 200;
 const HELPER_DAILY_SALARY = 20;
+const CASHIER_DAILY_SALARY = 10;
 const RESTAURANT_GAME_STATE_KEY = "restaurant_game_state";
 
 const TABLE_SELL_VALUE = TABLE_COST;
@@ -46,6 +48,7 @@ const SPAWN_POINT = { x: 50, y: GAME_HEIGHT + 50 };
 const EXIT_POINT = { x: -50, y: -50 };
 const OWNER_SPAWN = { x: GAME_WIDTH - 200, y: GAME_HEIGHT - 50 };
 const HELPER_SPAWN = { x: GAME_WIDTH - 250, y: GAME_HEIGHT - 50 };
+const CASHIER_SPAWN = { x: GAME_WIDTH - 350, y: GAME_HEIGHT - 50 };
 const GATE_POS = { x: 110, y: GAME_HEIGHT - 55 };
 const GATE_TRIGGER_DISTANCE = 28;
 
@@ -97,6 +100,7 @@ type RestaurantShopRuntimeState = {
   tables: TableState[];
   customers: CustomerState[];
   helpers: StaffState[];
+  cashiers: StaffState[];
   machines: MachineState[];
 };
 
@@ -124,6 +128,7 @@ type MathGateState = {
 type SavedShopState = {
   tables: number;
   helpers: number;
+  cashiers: number;
 };
 
 // --- Helper Functions ---
@@ -148,6 +153,10 @@ function getHelperRestPos(id: number): Pos {
   return { x: HELPER_SPAWN.x - id * 30, y: HELPER_SPAWN.y };
 }
 
+function getCashierRestPos(id: number): Pos {
+  return { x: CASHIER_SPAWN.x - id * 30, y: CASHIER_SPAWN.y };
+}
+
 function createTables(count: number): TableState[] {
   return Array.from({ length: count }).map((_, i) => ({
     id: i + 1,
@@ -160,6 +169,15 @@ function createHelpers(count: number): StaffState[] {
   return Array.from({ length: count }).map((_, i) => ({
     id: i + 1,
     pos: getHelperRestPos(i + 1),
+    inventory: [],
+    tasks: [],
+  }));
+}
+
+function createCashiers(count: number): StaffState[] {
+  return Array.from({ length: count }).map((_, i) => ({
+    id: i + 1,
+    pos: getCashierRestPos(i + 1),
     inventory: [],
     tasks: [],
   }));
@@ -179,6 +197,7 @@ function createShopRuntimeState(savedShop: SavedShopState): RestaurantShopRuntim
     tables: createTables(savedShop.tables),
     customers: [],
     helpers: createHelpers(savedShop.helpers),
+    cashiers: createCashiers(savedShop.cashiers),
     machines: createMachines(),
   };
 }
@@ -227,6 +246,7 @@ type SavedRestaurantGameState = {
   money: number;
   tables: number;
   helpers: number;
+  cashiers: number;
   shops: number;
   activeShop: number;
   payrollDue: number;
@@ -255,6 +275,7 @@ function normalizeSavedRestaurantGameState(raw: unknown): SavedRestaurantGameSta
   const activeShop = readSavedNumber(state.activeShop, 1, 1, shops);
   const legacyTables = readSavedNumber(state.tables, 1, 1, TABLE_POSITIONS.length);
   const legacyHelpers = readSavedNumber(state.helpers, 0, 0);
+  const legacyCashiers = readSavedNumber(state.cashiers, 0, 0);
   const rawShopStates = Array.isArray(state.shopStates) ? state.shopStates : [];
   const shopStates = Array.from({ length: shops }).map((_, index) => {
     const rawShop = rawShopStates[index];
@@ -264,14 +285,16 @@ function normalizeSavedRestaurantGameState(raw: unknown): SavedRestaurantGameSta
     return {
       tables: readSavedNumber(shop.tables, index === 0 ? legacyTables : 1, 1, TABLE_POSITIONS.length),
       helpers: readSavedNumber(shop.helpers, index === 0 ? legacyHelpers : 0, 0),
+      cashiers: readSavedNumber(shop.cashiers, index === 0 ? legacyCashiers : 0, 0),
     };
   });
-  const currentShop = shopStates[activeShop - 1] ?? { tables: 1, helpers: 0 };
+  const currentShop = shopStates[activeShop - 1] ?? { tables: 1, helpers: 0, cashiers: 0 };
 
   return {
     money: readSavedNumber(state.money, 0, 0),
     tables: currentShop.tables,
     helpers: currentShop.helpers,
+    cashiers: currentShop.cashiers,
     shops,
     activeShop,
     payrollDue: readSavedNumber(state.payrollDue, 0, 0),
@@ -307,11 +330,13 @@ export function RestaurantGamePage() {
     tables: [] as TableState[],
     customers: [] as CustomerState[],
     helpers: [] as StaffState[],
+    cashiers: [] as StaffState[],
     owner: { id: 0, pos: { ...OWNER_SPAWN }, inventory: [], tasks: [] } as StaffState,
     machines: createMachines(),
-    shops: [createShopRuntimeState({ tables: 1, helpers: 0 })] as RestaurantShopRuntimeState[],
+    shops: [createShopRuntimeState({ tables: 1, helpers: 0, cashiers: 0 })] as RestaurantShopRuntimeState[],
     money: 0,
     helpersCount: 0,
+    cashiersCount: 0,
     shopCount: 1,
     activeShop: 1,
     ownerManualTarget: undefined as Pos | undefined,
@@ -324,6 +349,7 @@ export function RestaurantGamePage() {
   const [, setRenderTrigger] = useState(0);
   const [tableCount, setTableCount] = useState(1);
   const [helperCount, setHelperCount] = useState(0);
+  const [cashierCount, setCashierCount] = useState(0);
   const [shopCount, setShopCount] = useState(1);
   const [activeShop, setActiveShop] = useState(1);
   const [payrollDue, setPayrollDue] = useState(0);
@@ -337,7 +363,7 @@ export function RestaurantGamePage() {
     const s = stateRef.current;
     const index = Math.max(0, Math.floor(shopNumber) - 1);
     while (s.shops.length <= index) {
-      s.shops.push(createShopRuntimeState({ tables: 1, helpers: 0 }));
+      s.shops.push(createShopRuntimeState({ tables: 1, helpers: 0, cashiers: 0 }));
     }
     return s.shops[index];
   }, []);
@@ -350,6 +376,7 @@ export function RestaurantGamePage() {
       tables: s.tables,
       customers: s.customers,
       helpers: s.helpers,
+      cashiers: s.cashiers,
       machines: s.machines,
     };
   }, []);
@@ -369,8 +396,10 @@ export function RestaurantGamePage() {
     s.tables = shop.tables;
     s.customers = shop.customers;
     s.helpers = shop.helpers;
+    s.cashiers = shop.cashiers;
     s.machines = shop.machines;
     s.helpersCount = shop.helpers.length;
+    s.cashiersCount = shop.cashiers.length;
     s.owner.tasks = [];
     s.owner.inventory = [];
     s.ownerManualTarget = undefined;
@@ -382,6 +411,7 @@ export function RestaurantGamePage() {
     setActiveShop(normalizedShop);
     setTableCount(shop.tables.length);
     setHelperCount(shop.helpers.length);
+    setCashierCount(shop.cashiers.length);
     setRenderTrigger(v => v + 1);
   }, [ensureShopRuntime, persistActiveShopRuntime]);
 
@@ -454,7 +484,7 @@ export function RestaurantGamePage() {
   const startOpeningTest = () => {
     if (dayRunning) return;
     if (payrollDue > 0) {
-      setMessage(`Pay the remaining $${payrollDue} helper salary before opening.`);
+      setMessage(`Pay the remaining $${payrollDue} staff salary before opening.`);
       setTimeout(() => setMessage(""), 2400);
       return;
     }
@@ -503,16 +533,18 @@ export function RestaurantGamePage() {
     const shops = Math.max(1, currentState.shopCount);
     const activeShopNumber = Math.min(Math.max(1, currentState.activeShop), shops);
     const shopStates = Array.from({ length: shops }).map((_, index) => {
-      const shop = currentState.shops[index] ?? createShopRuntimeState({ tables: 1, helpers: 0 });
+      const shop = currentState.shops[index] ?? createShopRuntimeState({ tables: 1, helpers: 0, cashiers: 0 });
       return {
         tables: Math.min(shop.tables.length, TABLE_POSITIONS.length),
         helpers: Math.max(0, shop.helpers.length),
+        cashiers: Math.max(0, shop.cashiers.length),
       };
     });
-    const currentShop = shopStates[activeShopNumber - 1] ?? { tables: 1, helpers: 0 };
+    const currentShop = shopStates[activeShopNumber - 1] ?? { tables: 1, helpers: 0, cashiers: 0 };
     const st: SavedRestaurantGameState = {
       money: currentState.money,
       helpers: currentShop.helpers,
+      cashiers: currentShop.cashiers,
       tables: currentShop.tables,
       shops,
       activeShop: activeShopNumber,
@@ -546,7 +578,7 @@ export function RestaurantGamePage() {
       setMoney(stateRef.current.money);
     }
     setPayrollDue(0);
-    setMessage("Helper salary paid. The shop can open again.");
+    setMessage("Staff salary paid. The shop can open again.");
   };
 
   const travelToNextShop = useCallback(() => {
@@ -557,8 +589,13 @@ export function RestaurantGamePage() {
   }, [activateShop]);
 
   const handleDayEnd = useCallback(() => {
+    persistActiveShopRuntime();
     const s = stateRef.current;
-    const salaryDue = s.helpersCount * HELPER_DAILY_SALARY;
+    const salaryDue = s.shops.reduce((total, shop) => {
+      return total
+        + shop.helpers.length * HELPER_DAILY_SALARY
+        + shop.cashiers.length * CASHIER_DAILY_SALARY;
+    }, 0);
 
     if (salaryDue === 0) {
       setMessage("Day over! Finishing up active customers...");
@@ -569,7 +606,7 @@ export function RestaurantGamePage() {
       s.money -= salaryDue;
       setMoney(s.money);
       setPayrollDue(0);
-      setMessage(`Day over! Paid $${salaryDue} helper salary.`);
+      setMessage(`Day over! Paid $${salaryDue} staff salary.`);
       return;
     }
 
@@ -577,26 +614,268 @@ export function RestaurantGamePage() {
     s.money = 0;
     setMoney(0);
     setPayrollDue(remaining);
-    setMessage(`Day over! Helper salary still needs $${remaining}. Sell a table or shop to pay it.`);
-  }, []);
+    setMessage(`Day over! Staff salary still needs $${remaining}. Sell a table or shop to pay it.`);
+  }, [persistActiveShopRuntime]);
 
   // Main Game Loop
   useEffect(() => {
     let animationFrameId: number;
     let lastTime = performance.now();
+    const orderTypes: OrderType[] = ["burger", "hotdog", "icecream", "coffee"];
+
+    const syncActiveShopRefs = () => {
+      const s = stateRef.current;
+      const activeShopState = ensureShopRuntime(s.activeShop);
+      s.tables = activeShopState.tables;
+      s.customers = activeShopState.customers;
+      s.helpers = activeShopState.helpers;
+      s.cashiers = activeShopState.cashiers;
+      s.machines = activeShopState.machines;
+      s.helpersCount = activeShopState.helpers.length;
+      s.cashiersCount = activeShopState.cashiers.length;
+    };
+
+    const collectTableMoney = (shop: RestaurantShopRuntimeState, tableId: number) => {
+      const s = stateRef.current;
+      const table = shop.tables.find(item => item.id === tableId);
+      if (!table || table.state !== "cash_ready" || !table.order) return;
+
+      s.money += MENU_PRICES[table.order];
+      setMoney(s.money);
+      table.state = "empty";
+      table.customerId = undefined;
+      table.order = undefined;
+    };
+
+    const processStaff = (
+      shop: RestaurantShopRuntimeState,
+      staff: StaffState,
+      restPos: Pos,
+      isOwner: boolean,
+      dt: number,
+    ) => {
+      const s = stateRef.current;
+      if (staff.tasks.length > 0) {
+        const currentTask = staff.tasks[0];
+        const prevX = staff.pos.x;
+        staff.pos = moveTowards(staff.pos, currentTask.targetPos, MOVE_SPEED, dt);
+        const isMoving = distance(staff.pos, currentTask.targetPos) >= 5;
+        staff.moving = isMoving;
+        if (staff.pos.x !== prevX) staff.facingLeft = staff.pos.x < prevX;
+
+        if (!isMoving) {
+          if (currentTask.type === "grab") {
+            const machine = shop.machines.find(m => m.type === currentTask.order);
+            if (machine && machine.stock > 0) {
+              machine.stock--;
+              staff.inventory.push(currentTask.order);
+              staff.tasks.shift();
+            }
+          } else if (currentTask.type === "serve") {
+            const table = shop.tables.find(item => item.id === currentTask.tableId);
+            if (table && table.state === "waiting") {
+              const invIndex = staff.inventory.indexOf(currentTask.order);
+              if (invIndex !== -1) {
+                staff.inventory.splice(invIndex, 1);
+                table.state = "eating";
+                table.timer = 5;
+              }
+            }
+            staff.tasks.shift();
+          } else if (currentTask.type === "collect") {
+            collectTableMoney(shop, currentTask.tableId);
+            staff.tasks.shift();
+          }
+        }
+      } else if (isOwner && s.ownerManualTarget) {
+        const prevX = staff.pos.x;
+        staff.pos = moveTowards(staff.pos, s.ownerManualTarget, MOVE_SPEED, dt);
+        const reachedTarget = distance(staff.pos, s.ownerManualTarget) < 4;
+        staff.moving = !reachedTarget;
+        if (staff.pos.x !== prevX) staff.facingLeft = staff.pos.x < prevX;
+
+        if (reachedTarget) {
+          if (s.pendingGateTravel && distance(staff.pos, GATE_POS) <= GATE_TRIGGER_DISTANCE) {
+            travelToNextShop();
+            staff.pos = { x: GATE_POS.x + 80, y: GATE_POS.y };
+          }
+          s.pendingGateTravel = false;
+          s.ownerManualTarget = undefined;
+          staff.moving = false;
+        }
+      } else {
+        const prevX = staff.pos.x;
+        staff.pos = moveTowards(staff.pos, restPos, MOVE_SPEED / 2, dt);
+        staff.moving = distance(staff.pos, restPos) >= 2;
+        if (staff.pos.x !== prevX) staff.facingLeft = staff.pos.x < prevX;
+      }
+    };
+
+    const updateOpenShop = (
+      shop: RestaurantShopRuntimeState,
+      shopNumber: number,
+      shouldSpawnCustomer: boolean,
+      dt: number,
+    ) => {
+      const s = stateRef.current;
+      const isActiveShop = shopNumber === s.activeShop;
+
+      if (shouldSpawnCustomer && Math.random() < 0.2 && shop.customers.filter(c => c.phase === "queue").length < 6) {
+        shop.customers.push({
+          id: s.customerIdCounter++,
+          order: orderTypes[Math.floor(Math.random() * orderTypes.length)],
+          pos: { ...SPAWN_POINT },
+          phase: "queue",
+        });
+      }
+
+      shop.machines.forEach(machine => {
+        const cookTime = MACHINE_COOK_TIME[machine.type];
+        machine.timer += dt;
+        if (machine.timer >= cookTime) {
+          machine.stock++;
+          machine.timer -= cookTime;
+        }
+      });
+
+      const queueCustomers = shop.customers.filter(customer => customer.phase === "queue");
+      queueCustomers.forEach((customer, index) => {
+        customer.queueIndex = index;
+        customer.target = getQueuePos(index);
+      });
+
+      const firstInQueue = queueCustomers[0];
+      if (firstInQueue) {
+        const emptyTable = shop.tables.find(table => table.state === "empty");
+        if (emptyTable) {
+          emptyTable.state = "waiting";
+          emptyTable.customerId = firstInQueue.id;
+          emptyTable.order = firstInQueue.order;
+
+          firstInQueue.phase = "walking_to_table";
+          firstInQueue.target = { ...emptyTable.pos };
+          firstInQueue.tableId = emptyTable.id;
+        }
+      }
+
+      shop.customers.forEach(customer => {
+        if (customer.target) {
+          const prevX = customer.pos.x;
+          customer.pos = moveTowards(customer.pos, customer.target, MOVE_SPEED, dt);
+          const isMoving = distance(customer.pos, customer.target) >= 1;
+          customer.moving = isMoving;
+          if (customer.pos.x !== prevX) customer.facingLeft = customer.pos.x < prevX;
+          if (!isMoving) {
+            if (customer.phase === "walking_to_table") {
+              customer.phase = "seated";
+            } else if (customer.phase === "leaving") {
+              customer.phase = "gone";
+            }
+          }
+        } else {
+          customer.moving = false;
+        }
+      });
+      shop.customers = shop.customers.filter(customer => customer.phase !== "gone");
+
+      shop.tables.forEach(table => {
+        if (table.state === "eating" && table.timer !== undefined) {
+          table.timer -= dt;
+          if (table.timer <= 0) {
+            table.state = "cash_ready";
+            table.timer = undefined;
+            const customer = shop.customers.find(item => item.id === table.customerId);
+            if (customer) {
+              customer.phase = "leaving";
+              customer.target = { ...EXIT_POINT };
+            }
+          }
+        }
+      });
+
+      if (isActiveShop) {
+        processStaff(shop, s.owner, OWNER_SPAWN, true, dt);
+      }
+
+      shop.helpers.forEach(helper => {
+        processStaff(shop, helper, getHelperRestPos(helper.id), false, dt);
+
+        const projectedInventoryCount = helper.inventory.length + helper.tasks.filter(task => task.type === "grab").length;
+        if (projectedInventoryCount >= 3) return;
+
+        const isTableBeingServed = (tableId: number) => {
+          if (isActiveShop && s.owner.tasks.some(task => task.type === "serve" && task.tableId === tableId)) return true;
+          return shop.helpers.some(item => item.tasks.some(task => task.type === "serve" && task.tableId === tableId));
+        };
+
+        const waitingTable = shop.tables.find(table => table.state === "waiting" && !isTableBeingServed(table.id));
+        if (!waitingTable?.order) return;
+
+        helper.tasks.push({ type: "grab", order: waitingTable.order, targetPos: { ...MACHINE_POSITIONS[waitingTable.order] } });
+        helper.tasks.push({ type: "serve", tableId: waitingTable.id, order: waitingTable.order, targetPos: { ...waitingTable.pos } });
+      });
+
+      shop.cashiers.forEach(cashier => {
+        processStaff(shop, cashier, getCashierRestPos(cashier.id), false, dt);
+        if (cashier.tasks.length > 0) return;
+
+        const isTableBeingCollected = (tableId: number) => {
+          if (isActiveShop && s.owner.tasks.some(task => task.type === "collect" && task.tableId === tableId)) return true;
+          return shop.cashiers.some(item => item.tasks.some(task => task.type === "collect" && task.tableId === tableId));
+        };
+
+        const cashReadyTable = shop.tables.find(table => table.state === "cash_ready" && !isTableBeingCollected(table.id));
+        if (cashReadyTable) {
+          cashier.tasks.push({ type: "collect", tableId: cashReadyTable.id, targetPos: { ...cashReadyTable.pos } });
+        }
+      });
+    };
+
+    const updateClosedShop = (shop: RestaurantShopRuntimeState, shopNumber: number, dt: number) => {
+      const s = stateRef.current;
+      const isActiveShop = shopNumber === s.activeShop;
+
+      shop.customers.forEach(customer => {
+        if (customer.phase === "queue") {
+          customer.phase = "leaving";
+          customer.target = { ...EXIT_POINT };
+        }
+        if (customer.target) {
+          customer.pos = moveTowards(customer.pos, customer.target, MOVE_SPEED, dt);
+          if (distance(customer.pos, customer.target) < 1 && customer.phase === "leaving") customer.phase = "gone";
+        }
+      });
+      shop.customers = shop.customers.filter(customer => customer.phase !== "gone");
+
+      if (isActiveShop) {
+        if (s.ownerManualTarget) {
+          processStaff(shop, s.owner, OWNER_SPAWN, true, dt);
+        } else {
+          s.owner.pos = moveTowards(s.owner.pos, OWNER_SPAWN, MOVE_SPEED / 2, dt);
+        }
+      }
+
+      shop.helpers.forEach(helper => {
+        helper.pos = moveTowards(helper.pos, getHelperRestPos(helper.id), MOVE_SPEED / 2, dt);
+      });
+      shop.cashiers.forEach(cashier => {
+        cashier.pos = moveTowards(cashier.pos, getCashierRestPos(cashier.id), MOVE_SPEED / 2, dt);
+      });
+    };
 
     const loop = (time: number) => {
       let dt = (time - lastTime) / 1000;
       if (dt < 0 || dt > 1) dt = 0.016;
       lastTime = time;
 
-      if (dayRunning) {
-        const s = stateRef.current;
+      const s = stateRef.current;
+      let shouldSpawnCustomer = false;
 
-        // Time management
+      if (dayRunning) {
         s.timeAccumulator += dt;
         if (s.timeAccumulator >= 1) {
           s.timeAccumulator -= 1;
+          shouldSpawnCustomer = true;
           setTimeLeft(prev => {
             if (prev <= 1) {
               setDayRunning(false);
@@ -605,240 +884,38 @@ export function RestaurantGamePage() {
             }
             return prev - 1;
           });
-
-          // Spawning customers (every second check, ~20% chance)
-          if (Math.random() < 0.2 && s.customers.filter(c => c.phase === "queue").length < 6) {
-            const orderTypes: OrderType[] = ["burger", "hotdog", "icecream", "coffee"];
-            s.customers.push({
-              id: s.customerIdCounter++,
-              order: orderTypes[Math.floor(Math.random() * orderTypes.length)],
-              pos: { ...SPAWN_POINT },
-              phase: "queue"
-            });
-          }
         }
-
-        // --- Logic Updates ---
-
-        // 0. Machine Production (per-type cook times)
-        s.machines.forEach(m => {
-          const cookTime = MACHINE_COOK_TIME[m.type];
-          m.timer += dt;
-          if (m.timer >= cookTime) {
-            m.stock++;
-            m.timer -= cookTime;
-          }
-        });
-
-        // 1. Assign Tables to Queue
-        const queueCustomers = s.customers.filter(c => c.phase === "queue");
-        queueCustomers.forEach((c, index) => {
-          c.queueIndex = index;
-          c.target = getQueuePos(index);
-        });
-
-        const firstInQueue = queueCustomers[0];
-        if (firstInQueue) {
-          const emptyTable = s.tables.find(t => t.state === "empty");
-          if (emptyTable) {
-            emptyTable.state = "waiting";
-            emptyTable.customerId = firstInQueue.id;
-            emptyTable.order = firstInQueue.order;
-
-            firstInQueue.phase = "walking_to_table";
-            firstInQueue.target = { ...emptyTable.pos };
-            firstInQueue.tableId = emptyTable.id;
-          }
-        }
-
-        // 2. Customers Movement & Logic
-        s.customers.forEach(c => {
-          if (c.target) {
-            const prevX = c.pos.x;
-            c.pos = moveTowards(c.pos, c.target, MOVE_SPEED, dt);
-            const isMoving = distance(c.pos, c.target) >= 1;
-            c.moving = isMoving;
-            if (c.pos.x !== prevX) c.facingLeft = c.pos.x < prevX;
-            if (!isMoving) {
-              if (c.phase === "walking_to_table") {
-                c.phase = "seated";
-              } else if (c.phase === "leaving") {
-                c.phase = "gone";
-              }
-            }
-          } else {
-            c.moving = false;
-          }
-        });
-        s.customers = s.customers.filter(c => c.phase !== "gone");
-
-        // 3. Tables Logic (Eating timers)
-        s.tables.forEach(t => {
-          if (t.state === "eating" && t.timer !== undefined) {
-            t.timer -= dt;
-            if (t.timer <= 0) {
-              t.state = "cash_ready";
-              t.timer = undefined;
-              const cust = s.customers.find(c => c.id === t.customerId);
-              if (cust) {
-                cust.phase = "leaving";
-                cust.target = { ...EXIT_POINT };
-              }
-            }
-          }
-        });
-
-        // Helper Function for Staff Logic (Owner & Helpers)
-        const processStaff = (staff: StaffState, isOwner: boolean) => {
-          if (staff.tasks.length > 0) {
-            const currentTask = staff.tasks[0];
-            const prevX = staff.pos.x;
-            staff.pos = moveTowards(staff.pos, currentTask.targetPos, MOVE_SPEED, dt);
-            const isMoving = distance(staff.pos, currentTask.targetPos) >= 5;
-            staff.moving = isMoving;
-            if (staff.pos.x !== prevX) staff.facingLeft = staff.pos.x < prevX;
-
-            if (!isMoving) {
-              if (currentTask.type === "grab") {
-                const machine = s.machines.find(m => m.type === currentTask.order);
-                // Wait for stock if none available
-                if (machine && machine.stock > 0) {
-                  machine.stock--;
-                  staff.inventory.push(currentTask.order);
-                  staff.tasks.shift();
-                }
-              } else if (currentTask.type === "serve") {
-                const t = s.tables.find(table => table.id === currentTask.tableId);
-                if (t && t.state === "waiting") {
-                  // Only serve if we have the correct item
-                  const invIndex = staff.inventory.indexOf(currentTask.order);
-                  if (invIndex !== -1) {
-                    staff.inventory.splice(invIndex, 1);
-                    t.state = "eating";
-                    t.timer = 5;
-                  }
-                }
-                // Even if we couldn't serve (e.g. table changed state), pop the task
-                staff.tasks.shift();
-              } else if (currentTask.type === "collect") {
-                const t = s.tables.find(table => table.id === currentTask.tableId);
-                if (t && t.state === "cash_ready") {
-                  s.money += MENU_PRICES[t.order!];
-                  setMoney(s.money);
-                  t.state = "empty";
-                  t.customerId = undefined;
-                  t.order = undefined;
-                }
-                staff.tasks.shift();
-              }
-            }
-          } else if (isOwner && s.ownerManualTarget) {
-            const prevX = staff.pos.x;
-            staff.pos = moveTowards(staff.pos, s.ownerManualTarget, MOVE_SPEED, dt);
-            const reachedTarget = distance(staff.pos, s.ownerManualTarget) < 4;
-            staff.moving = !reachedTarget;
-            if (staff.pos.x !== prevX) staff.facingLeft = staff.pos.x < prevX;
-
-            if (reachedTarget) {
-              if (s.pendingGateTravel && distance(staff.pos, GATE_POS) <= GATE_TRIGGER_DISTANCE) {
-                travelToNextShop();
-                staff.pos = { x: GATE_POS.x + 80, y: GATE_POS.y };
-              }
-              s.pendingGateTravel = false;
-              s.ownerManualTarget = undefined;
-              staff.moving = false;
-            }
-          } else {
-            // Idle movement
-            const spawnPoint = isOwner ? OWNER_SPAWN : getHelperRestPos(staff.id);
-            const prevX = staff.pos.x;
-            staff.pos = moveTowards(staff.pos, spawnPoint, MOVE_SPEED / 2, dt);
-            staff.moving = distance(staff.pos, spawnPoint) >= 2;
-            if (staff.pos.x !== prevX) staff.facingLeft = staff.pos.x < prevX;
-          }
-        };
-
-        // 4. Owner Logic
-        processStaff(s.owner, true);
-
-        // 5. Helpers Logic
-        s.helpers.forEach(h => {
-          processStaff(h, false);
-
-          // AI Logic: Find tasks if we have capacity
-          const projectedInventoryCount = h.inventory.length + h.tasks.filter(t => t.type === 'grab').length;
-
-          if (projectedInventoryCount < 3) {
-            // Find a table waiting that isn't being served by ANYONE (Owner or other Helpers)
-            const isTableBeingServed = (tableId: number) => {
-              if (s.owner.tasks.some(t => t.type === 'serve' && t.tableId === tableId)) return true;
-              return s.helpers.some(helper => helper.tasks.some(t => t.type === 'serve' && t.tableId === tableId));
-            };
-
-            const waitingTable = s.tables.find(t => t.state === "waiting" && !isTableBeingServed(t.id));
-
-            if (waitingTable && waitingTable.order) {
-              const order = waitingTable.order;
-              // Queue grab -> serve
-              h.tasks.push({ type: "grab", order, targetPos: { ...MACHINE_POSITIONS[order] } });
-              h.tasks.push({ type: "serve", tableId: waitingTable.id, order, targetPos: { ...waitingTable.pos } });
-            }
-          }
-        });
-
-      } else {
-        // Not running: clear queue gradually, staff goes idle
-        const s = stateRef.current;
-        s.customers.forEach(c => {
-          if (c.phase === "queue") {
-            c.phase = "leaving";
-            c.target = { ...EXIT_POINT };
-          }
-          if (c.target) {
-            c.pos = moveTowards(c.pos, c.target, MOVE_SPEED, dt);
-            if (distance(c.pos, c.target) < 1 && c.phase === "leaving") c.phase = "gone";
-          }
-        });
-        s.customers = s.customers.filter(c => c.phase !== "gone");
-
-        if (s.ownerManualTarget) {
-          const prevX = s.owner.pos.x;
-          s.owner.pos = moveTowards(s.owner.pos, s.ownerManualTarget, MOVE_SPEED, dt);
-          const reachedTarget = distance(s.owner.pos, s.ownerManualTarget) < 4;
-          s.owner.moving = !reachedTarget;
-          if (s.owner.pos.x !== prevX) s.owner.facingLeft = s.owner.pos.x < prevX;
-          if (reachedTarget) {
-            if (s.pendingGateTravel && distance(s.owner.pos, GATE_POS) <= GATE_TRIGGER_DISTANCE) {
-              travelToNextShop();
-              s.owner.pos = { x: GATE_POS.x + 80, y: GATE_POS.y };
-            }
-            s.pendingGateTravel = false;
-            s.ownerManualTarget = undefined;
-          }
-        } else {
-          s.owner.pos = moveTowards(s.owner.pos, OWNER_SPAWN, MOVE_SPEED / 2, dt);
-        }
-        s.helpers.forEach(h => {
-          h.pos = moveTowards(h.pos, getHelperRestPos(h.id), MOVE_SPEED / 2, dt);
-        });
       }
 
+      for (let index = 0; index < s.shopCount; index++) {
+        const shop = ensureShopRuntime(index + 1);
+        if (dayRunning) {
+          updateOpenShop(shop, index + 1, shouldSpawnCustomer, dt);
+        } else {
+          updateClosedShop(shop, index + 1, dt);
+        }
+      }
+
+      syncActiveShopRefs();
       setRenderTrigger(v => v + 1);
       animationFrameId = requestAnimationFrame(loop);
     };
 
     animationFrameId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [dayRunning, handleDayEnd, travelToNextShop]);
+  }, [dayRunning, ensureShopRuntime, handleDayEnd, travelToNextShop]);
 
   // Click Handlers
   const handleTableClick = (table: TableState) => {
     console.log("Table clicked!", table.state);
     const s = stateRef.current;
 
-    // Check if table is already targeted by Owner
-    if (s.owner.tasks.some(t => ('tableId' in t) && t.tableId === table.id)) {
-      return; // Already handling this table
+    // Check if table is already targeted by Owner or a cashier.
+    if (
+      s.owner.tasks.some(t => ('tableId' in t) && t.tableId === table.id)
+      || s.cashiers.some(cashier => cashier.tasks.some(t => t.type === "collect" && t.tableId === table.id))
+    ) {
+      return;
     }
 
     s.ownerManualTarget = undefined;
@@ -897,7 +974,7 @@ export function RestaurantGamePage() {
     if (s.money >= SHOP_COST) {
       s.money -= SHOP_COST;
       s.shopCount += 1;
-      s.shops.push(createShopRuntimeState({ tables: 1, helpers: 0 }));
+      s.shops.push(createShopRuntimeState({ tables: 1, helpers: 0, cashiers: 0 }));
       setMoney(s.money);
       setShopCount(s.shopCount);
       setMessage(`Bought Shop #${s.shopCount}. Use the gate to visit it.`);
@@ -947,6 +1024,23 @@ export function RestaurantGamePage() {
       });
       s.helpersCount = s.helpers.length;
       setHelperCount(s.helpersCount);
+    }
+  };
+
+  const hireCashier = () => {
+    const s = stateRef.current;
+    if (s.money >= CASHIER_COST) {
+      s.money -= CASHIER_COST;
+      setMoney(s.money);
+      const cashierId = s.cashiers.length + 1;
+      s.cashiers.push({
+        id: cashierId,
+        pos: { x: SPAWN_POINT.x, y: SPAWN_POINT.y },
+        inventory: [],
+        tasks: []
+      });
+      s.cashiersCount = s.cashiers.length;
+      setCashierCount(s.cashiersCount);
     }
   };
 
@@ -1094,7 +1188,7 @@ export function RestaurantGamePage() {
 
       {payrollDue > 0 && (
         <div className="flex flex-wrap items-center justify-center gap-3 border-y border-red-500/40 bg-red-950/60 p-3 text-sm text-red-50 shadow-inner z-10">
-          <span className="font-bold">Helper salary still needs ${payrollDue}.</span>
+          <span className="font-bold">Staff salary still needs ${payrollDue}.</span>
           <button
             onClick={sellTableForPayroll}
             disabled={!canSellTableForPayroll}
@@ -1134,6 +1228,13 @@ export function RestaurantGamePage() {
         >
           <span>🧑‍🍳 Hire Helper (${HELPER_COST})</span>
           <span className="bg-purple-800 px-2 rounded-full">{helperCount}</span>
+        </button>
+        <button
+          onClick={hireCashier} disabled={money < CASHIER_COST}
+          className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:hover:bg-emerald-600 px-4 py-2 rounded transition text-sm flex items-center gap-2"
+        >
+          <span>🧑‍💼 Hire Cashier (${CASHIER_COST})</span>
+          <span className="bg-emerald-800 px-2 rounded-full">{cashierCount}</span>
         </button>
       </div>
 
@@ -1261,6 +1362,25 @@ export function RestaurantGamePage() {
                        ))}
                      </div>
                    )}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {/* Cashiers */}
+          {s.cashiers.map(cashier => (
+            <div
+              key={`cashier-${cashier.id}`}
+              className="absolute w-12 h-12 -ml-6 -mt-6 flex flex-col items-center justify-center z-30"
+              style={{ transform: `translate(${cashier.pos.x}px, ${cashier.pos.y}px)` }}
+            >
+              {cashier.tasks.length > 0 && <div className="absolute -top-4 text-[10px] text-emerald-200 bg-zinc-900/80 px-1 rounded whitespace-nowrap">collecting</div>}
+              <div className={`${cashier.moving ? 'rg-walk' : ''}`} style={{ transform: cashier.facingLeft ? 'scaleX(-1)' : undefined }}>
+                <div className="text-5xl drop-shadow-md relative">
+                  🧑‍💼
+                  {cashier.tasks.some(task => task.type === 'collect') && (
+                    <span className={`absolute top-0 rounded-full bg-green-100 px-1 text-xs font-bold text-green-700 shadow ${cashier.facingLeft ? '-left-4' : '-right-4'}`}>$</span>
+                  )}
                 </div>
               </div>
             </div>
