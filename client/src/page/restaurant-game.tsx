@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useContext } from "react";
+import { useState, useEffect, useRef, useContext, useCallback } from "react";
 import type { MouseEvent } from "react";
 import { client } from "../app/runtime";
 import { ProfileContext } from "../state/profile";
@@ -93,6 +93,13 @@ type MachineState = {
   timer: number; // time until next stock
 };
 
+type RestaurantShopRuntimeState = {
+  tables: TableState[];
+  customers: CustomerState[];
+  helpers: StaffState[];
+  machines: MachineState[];
+};
+
 type MathQuestion = {
   id: number;
   left: number;
@@ -114,6 +121,11 @@ type MathGateState = {
   result: MathGateResult | null;
 };
 
+type SavedShopState = {
+  tables: number;
+  helpers: number;
+};
+
 // --- Helper Functions ---
 function distance(p1: Pos, p2: Pos) {
   return Math.hypot(p1.x - p2.x, p1.y - p2.y);
@@ -130,6 +142,45 @@ function moveTowards(current: Pos, target: Pos, speed: number, dt: number): Pos 
 }
 function getQueuePos(index: number): Pos {
   return { x: 50, y: 150 + index * 60 };
+}
+
+function getHelperRestPos(id: number): Pos {
+  return { x: HELPER_SPAWN.x - id * 30, y: HELPER_SPAWN.y };
+}
+
+function createTables(count: number): TableState[] {
+  return Array.from({ length: count }).map((_, i) => ({
+    id: i + 1,
+    pos: TABLE_POSITIONS[i],
+    state: "empty",
+  }));
+}
+
+function createHelpers(count: number): StaffState[] {
+  return Array.from({ length: count }).map((_, i) => ({
+    id: i + 1,
+    pos: getHelperRestPos(i + 1),
+    inventory: [],
+    tasks: [],
+  }));
+}
+
+function createMachines(): MachineState[] {
+  return [
+    { type: "burger", stock: 0, timer: 0 },
+    { type: "hotdog", stock: 0, timer: 0 },
+    { type: "coffee", stock: 0, timer: 0 },
+    { type: "icecream", stock: 0, timer: 0 },
+  ];
+}
+
+function createShopRuntimeState(savedShop: SavedShopState): RestaurantShopRuntimeState {
+  return {
+    tables: createTables(savedShop.tables),
+    customers: [],
+    helpers: createHelpers(savedShop.helpers),
+    machines: createMachines(),
+  };
 }
 
 function randomInt(maxInclusive: number) {
@@ -179,6 +230,7 @@ type SavedRestaurantGameState = {
   shops: number;
   activeShop: number;
   payrollDue: number;
+  shopStates: SavedShopState[];
 };
 
 function readSavedNumber(value: unknown, fallback: number, min: number, max = Number.MAX_SAFE_INTEGER) {
@@ -200,14 +252,30 @@ function normalizeSavedRestaurantGameState(raw: unknown): SavedRestaurantGameSta
     : {};
 
   const shops = readSavedNumber(state.shops, 1, 1);
+  const activeShop = readSavedNumber(state.activeShop, 1, 1, shops);
+  const legacyTables = readSavedNumber(state.tables, 1, 1, TABLE_POSITIONS.length);
+  const legacyHelpers = readSavedNumber(state.helpers, 0, 0);
+  const rawShopStates = Array.isArray(state.shopStates) ? state.shopStates : [];
+  const shopStates = Array.from({ length: shops }).map((_, index) => {
+    const rawShop = rawShopStates[index];
+    const shop = rawShop && typeof rawShop === "object"
+      ? rawShop as Record<string, unknown>
+      : {};
+    return {
+      tables: readSavedNumber(shop.tables, index === 0 ? legacyTables : 1, 1, TABLE_POSITIONS.length),
+      helpers: readSavedNumber(shop.helpers, index === 0 ? legacyHelpers : 0, 0),
+    };
+  });
+  const currentShop = shopStates[activeShop - 1] ?? { tables: 1, helpers: 0 };
 
   return {
     money: readSavedNumber(state.money, 0, 0),
-    tables: readSavedNumber(state.tables, 1, 1, TABLE_POSITIONS.length),
-    helpers: readSavedNumber(state.helpers, 0, 0),
+    tables: currentShop.tables,
+    helpers: currentShop.helpers,
     shops,
-    activeShop: readSavedNumber(state.activeShop, 1, 1, shops),
+    activeShop,
     payrollDue: readSavedNumber(state.payrollDue, 0, 0),
+    shopStates,
   };
 }
 
@@ -240,15 +308,12 @@ export function RestaurantGamePage() {
     customers: [] as CustomerState[],
     helpers: [] as StaffState[],
     owner: { id: 0, pos: { ...OWNER_SPAWN }, inventory: [], tasks: [] } as StaffState,
-    machines: [
-      { type: "burger", stock: 0, timer: 0 },
-      { type: "hotdog", stock: 0, timer: 0 },
-      { type: "coffee", stock: 0, timer: 0 },
-      { type: "icecream", stock: 0, timer: 0 }
-    ] as MachineState[],
+    machines: createMachines(),
+    shops: [createShopRuntimeState({ tables: 1, helpers: 0 })] as RestaurantShopRuntimeState[],
     money: 0,
     helpersCount: 0,
     shopCount: 1,
+    activeShop: 1,
     ownerManualTarget: undefined as Pos | undefined,
     pendingGateTravel: false,
     customerIdCounter: 1,
@@ -267,6 +332,58 @@ export function RestaurantGamePage() {
   const remoteStateLoaded = useRef(false);
   const boardContainerRef = useRef<HTMLDivElement>(null);
   const [boardScale, setBoardScale] = useState(1);
+
+  const ensureShopRuntime = useCallback((shopNumber: number) => {
+    const s = stateRef.current;
+    const index = Math.max(0, Math.floor(shopNumber) - 1);
+    while (s.shops.length <= index) {
+      s.shops.push(createShopRuntimeState({ tables: 1, helpers: 0 }));
+    }
+    return s.shops[index];
+  }, []);
+
+  const persistActiveShopRuntime = useCallback(() => {
+    const s = stateRef.current;
+    const index = Math.max(0, s.activeShop - 1);
+    if (!s.shops[index]) return;
+    s.shops[index] = {
+      tables: s.tables,
+      customers: s.customers,
+      helpers: s.helpers,
+      machines: s.machines,
+    };
+  }, []);
+
+  const activateShop = useCallback((shopNumber: number, ownerPos?: Pos, persistCurrent = true) => {
+    const s = stateRef.current;
+    if (persistCurrent) {
+      persistActiveShopRuntime();
+    }
+    const normalizedShop = Math.min(
+      Math.max(1, Math.floor(shopNumber)),
+      Math.max(1, s.shopCount),
+    );
+    const shop = ensureShopRuntime(normalizedShop);
+
+    s.activeShop = normalizedShop;
+    s.tables = shop.tables;
+    s.customers = shop.customers;
+    s.helpers = shop.helpers;
+    s.machines = shop.machines;
+    s.helpersCount = shop.helpers.length;
+    s.owner.tasks = [];
+    s.owner.inventory = [];
+    s.ownerManualTarget = undefined;
+    s.pendingGateTravel = false;
+    if (ownerPos) {
+      s.owner.pos = { ...ownerPos };
+    }
+
+    setActiveShop(normalizedShop);
+    setTableCount(shop.tables.length);
+    setHelperCount(shop.helpers.length);
+    setRenderTrigger(v => v + 1);
+  }, [ensureShopRuntime, persistActiveShopRuntime]);
 
   // Responsive scaling
   useEffect(() => {
@@ -299,38 +416,26 @@ export function RestaurantGamePage() {
             loadedState = normalizeSavedRestaurantGameState(res.data);
             saveLocalRestaurantGameState(loadedState);
           }
-        } catch (e) {}
+        } catch (e) {
+          console.warn("Failed to load remote restaurant game state", e);
+        }
         remoteStateLoaded.current = true;
       }
 
       setMoney(loadedState.money);
-      setTableCount(loadedState.tables);
-      setHelperCount(loadedState.helpers);
       setShopCount(loadedState.shops);
-      setActiveShop(loadedState.activeShop);
       setPayrollDue(loadedState.payrollDue);
 
       stateRef.current.money = loadedState.money;
-      stateRef.current.helpersCount = loadedState.helpers;
       stateRef.current.shopCount = loadedState.shops;
-      stateRef.current.tables = Array.from({ length: loadedState.tables }).map((_, i) => ({
-        id: i + 1,
-        pos: TABLE_POSITIONS[i],
-        state: "empty"
-      }));
-      stateRef.current.helpers = Array.from({ length: loadedState.helpers }).map((_, i) => ({
-        id: i + 1,
-        pos: { x: HELPER_SPAWN.x - i * 30, y: HELPER_SPAWN.y },
-        inventory: [],
-        tasks: []
-      }));
+      stateRef.current.shops = loadedState.shopStates.map(createShopRuntimeState);
+      activateShop(loadedState.activeShop, undefined, false);
 
       savedStateLoaded.current = true;
-      setRenderTrigger(v => v + 1);
     };
 
     load();
-  }, [profile]);
+  }, [profile, activateShop]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -393,13 +498,26 @@ export function RestaurantGamePage() {
   };
 
   const saveProgress = async () => {
+    persistActiveShopRuntime();
+    const currentState = stateRef.current;
+    const shops = Math.max(1, currentState.shopCount);
+    const activeShopNumber = Math.min(Math.max(1, currentState.activeShop), shops);
+    const shopStates = Array.from({ length: shops }).map((_, index) => {
+      const shop = currentState.shops[index] ?? createShopRuntimeState({ tables: 1, helpers: 0 });
+      return {
+        tables: Math.min(shop.tables.length, TABLE_POSITIONS.length),
+        helpers: Math.max(0, shop.helpers.length),
+      };
+    });
+    const currentShop = shopStates[activeShopNumber - 1] ?? { tables: 1, helpers: 0 };
     const st: SavedRestaurantGameState = {
-      money: stateRef.current.money,
-      helpers: stateRef.current.helpersCount,
-      tables: Math.min(stateRef.current.tables.length, TABLE_POSITIONS.length),
-      shops: Math.max(1, stateRef.current.shopCount),
-      activeShop: Math.min(Math.max(1, activeShop), Math.max(1, stateRef.current.shopCount)),
+      money: currentState.money,
+      helpers: currentShop.helpers,
+      tables: currentShop.tables,
+      shops,
+      activeShop: activeShopNumber,
       payrollDue: Math.max(0, payrollDue),
+      shopStates,
     };
     saveLocalRestaurantGameState(st);
 
@@ -431,15 +549,14 @@ export function RestaurantGamePage() {
     setMessage("Helper salary paid. The shop can open again.");
   };
 
-  const travelToNextShop = () => {
-    setActiveShop(current => {
-      const nextShop = current >= stateRef.current.shopCount ? 1 : current + 1;
-      setMessage(`Moved through the gate to Shop #${nextShop}.`);
-      return nextShop;
-    });
-  };
+  const travelToNextShop = useCallback(() => {
+    const s = stateRef.current;
+    const nextShop = s.activeShop >= s.shopCount ? 1 : s.activeShop + 1;
+    activateShop(nextShop, { x: GATE_POS.x + 80, y: GATE_POS.y });
+    setMessage(`Moved through the gate to Shop #${nextShop}.`);
+  }, [activateShop]);
 
-  const handleDayEnd = () => {
+  const handleDayEnd = useCallback(() => {
     const s = stateRef.current;
     const salaryDue = s.helpersCount * HELPER_DAILY_SALARY;
 
@@ -461,7 +578,7 @@ export function RestaurantGamePage() {
     setMoney(0);
     setPayrollDue(remaining);
     setMessage(`Day over! Helper salary still needs $${remaining}. Sell a table or shop to pay it.`);
-  };
+  }, []);
 
   // Main Game Loop
   useEffect(() => {
@@ -633,7 +750,7 @@ export function RestaurantGamePage() {
             }
           } else {
             // Idle movement
-            const spawnPoint = isOwner ? OWNER_SPAWN : { x: HELPER_SPAWN.x - staff.id * 30, y: HELPER_SPAWN.y };
+            const spawnPoint = isOwner ? OWNER_SPAWN : getHelperRestPos(staff.id);
             const prevX = staff.pos.x;
             staff.pos = moveTowards(staff.pos, spawnPoint, MOVE_SPEED / 2, dt);
             staff.moving = distance(staff.pos, spawnPoint) >= 2;
@@ -702,7 +819,7 @@ export function RestaurantGamePage() {
           s.owner.pos = moveTowards(s.owner.pos, OWNER_SPAWN, MOVE_SPEED / 2, dt);
         }
         s.helpers.forEach(h => {
-          h.pos = moveTowards(h.pos, { x: HELPER_SPAWN.x - h.id * 30, y: HELPER_SPAWN.y }, MOVE_SPEED / 2, dt);
+          h.pos = moveTowards(h.pos, getHelperRestPos(h.id), MOVE_SPEED / 2, dt);
         });
       }
 
@@ -712,7 +829,7 @@ export function RestaurantGamePage() {
 
     animationFrameId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [dayRunning]);
+  }, [dayRunning, handleDayEnd, travelToNextShop]);
 
   // Click Handlers
   const handleTableClick = (table: TableState) => {
@@ -780,6 +897,7 @@ export function RestaurantGamePage() {
     if (s.money >= SHOP_COST) {
       s.money -= SHOP_COST;
       s.shopCount += 1;
+      s.shops.push(createShopRuntimeState({ tables: 1, helpers: 0 }));
       setMoney(s.money);
       setShopCount(s.shopCount);
       setMessage(`Bought Shop #${s.shopCount}. Use the gate to visit it.`);
@@ -807,8 +925,11 @@ export function RestaurantGamePage() {
     }
 
     s.shopCount -= 1;
+    s.shops.splice(s.shopCount);
     setShopCount(s.shopCount);
-    setActiveShop(current => Math.min(current, s.shopCount));
+    if (s.activeShop > s.shopCount) {
+      activateShop(s.shopCount, OWNER_SPAWN);
+    }
     settlePayroll(SHOP_SELL_VALUE);
   };
 
@@ -817,13 +938,14 @@ export function RestaurantGamePage() {
     if (s.money >= HELPER_COST) {
       s.money -= HELPER_COST;
       setMoney(s.money);
-      s.helpersCount++;
+      const helperId = s.helpers.length + 1;
       s.helpers.push({
-        id: s.helpersCount,
+        id: helperId,
         pos: { x: SPAWN_POINT.x, y: SPAWN_POINT.y },
         inventory: [],
         tasks: []
       });
+      s.helpersCount = s.helpers.length;
       setHelperCount(s.helpersCount);
     }
   };
