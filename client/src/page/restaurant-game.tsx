@@ -1027,6 +1027,19 @@ export function RestaurantGamePage() {
     }
   };
 
+  const layoffHelper = () => {
+    const s = stateRef.current;
+    if (s.helpers.length === 0 || s.money < HELPER_DAILY_SALARY) return;
+
+    s.money -= HELPER_DAILY_SALARY;
+    setMoney(s.money);
+    s.helpers.pop();
+    s.helpersCount = s.helpers.length;
+    setHelperCount(s.helpersCount);
+    setMessage(`Helper laid off. Paid $${HELPER_DAILY_SALARY} final salary.`);
+    setTimeout(() => setMessage(""), 2000);
+  };
+
   const hireCashier = () => {
     const s = stateRef.current;
     if (s.money >= CASHIER_COST) {
@@ -1042,6 +1055,19 @@ export function RestaurantGamePage() {
       s.cashiersCount = s.cashiers.length;
       setCashierCount(s.cashiersCount);
     }
+  };
+
+  const layoffCashier = () => {
+    const s = stateRef.current;
+    if (s.cashiers.length === 0 || s.money < CASHIER_DAILY_SALARY) return;
+
+    s.money -= CASHIER_DAILY_SALARY;
+    setMoney(s.money);
+    s.cashiers.pop();
+    s.cashiersCount = s.cashiers.length;
+    setCashierCount(s.cashiersCount);
+    setMessage(`Cashier laid off. Paid $${CASHIER_DAILY_SALARY} final salary.`);
+    setTimeout(() => setMessage(""), 2000);
   };
 
   const s = stateRef.current;
@@ -1230,11 +1256,25 @@ export function RestaurantGamePage() {
           <span className="bg-purple-800 px-2 rounded-full">{helperCount}</span>
         </button>
         <button
+          onClick={layoffHelper}
+          disabled={helperCount === 0 || money < HELPER_DAILY_SALARY}
+          className="bg-purple-900 hover:bg-purple-800 disabled:opacity-50 disabled:hover:bg-purple-900 px-4 py-2 rounded transition text-sm flex items-center gap-2"
+        >
+          <span>Lay Off Helper (${HELPER_DAILY_SALARY})</span>
+        </button>
+        <button
           onClick={hireCashier} disabled={money < CASHIER_COST}
           className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:hover:bg-emerald-600 px-4 py-2 rounded transition text-sm flex items-center gap-2"
         >
           <span>🧑‍💼 Hire Cashier (${CASHIER_COST})</span>
           <span className="bg-emerald-800 px-2 rounded-full">{cashierCount}</span>
+        </button>
+        <button
+          onClick={layoffCashier}
+          disabled={cashierCount === 0 || money < CASHIER_DAILY_SALARY}
+          className="bg-emerald-900 hover:bg-emerald-800 disabled:opacity-50 disabled:hover:bg-emerald-900 px-4 py-2 rounded transition text-sm flex items-center gap-2"
+        >
+          <span>Lay Off Cashier (${CASHIER_DAILY_SALARY})</span>
         </button>
       </div>
 
