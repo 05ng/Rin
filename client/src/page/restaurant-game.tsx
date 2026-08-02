@@ -323,6 +323,21 @@ function saveLocalRestaurantGameState(state: SavedRestaurantGameState) {
   localStorage.setItem(RESTAURANT_GAME_STATE_KEY, JSON.stringify(state));
 }
 
+function createInitialRestaurantGameState(): SavedRestaurantGameState {
+  return {
+    money: 0,
+    tables: 1,
+    helpers: 0,
+    cashiers: 0,
+    shops: 1,
+    activeShop: 1,
+    payrollDue: 0,
+    hasCar: false,
+    daysCompleted: 0,
+    shopStates: [{ tables: 1, helpers: 0, cashiers: 0 }],
+  };
+}
+
 export function RestaurantGamePage() {
   const profile = useContext(ProfileContext);
 
@@ -576,6 +591,57 @@ export function RestaurantGamePage() {
       setMessage(res?.error ? "Game saved locally. Remote save failed." : "Game saved!");
     } else {
       setMessage("Game saved locally!");
+    }
+    setTimeout(() => setMessage(""), 2000);
+  };
+
+  const resetGame = async () => {
+    const confirmed = window.confirm("Reset Burger Shop and start a new game? Your current progress will be lost.");
+    if (!confirmed) return;
+
+    const freshState = createInitialRestaurantGameState();
+    const freshShop = createShopRuntimeState(freshState.shopStates[0]);
+    const s = stateRef.current;
+
+    s.tables = freshShop.tables;
+    s.customers = freshShop.customers;
+    s.helpers = freshShop.helpers;
+    s.cashiers = freshShop.cashiers;
+    s.machines = freshShop.machines;
+    s.shops = [freshShop];
+    s.money = freshState.money;
+    s.helpersCount = freshState.helpers;
+    s.cashiersCount = freshState.cashiers;
+    s.shopCount = freshState.shops;
+    s.activeShop = freshState.activeShop;
+    s.hasCar = freshState.hasCar;
+    s.daysCompleted = freshState.daysCompleted;
+    s.owner = { id: 0, pos: { ...OWNER_SPAWN }, inventory: [], tasks: [] };
+    s.ownerManualTarget = undefined;
+    s.pendingGateTravel = false;
+    s.customerIdCounter = 1;
+    s.timeAccumulator = 0;
+
+    setMoney(freshState.money);
+    setTimeLeft(INITIAL_DAY_LENGTH_SECONDS);
+    setDayRunning(false);
+    setMathGate(closedMathGateState());
+    setTableCount(freshState.tables);
+    setHelperCount(freshState.helpers);
+    setCashierCount(freshState.cashiers);
+    setShopCount(freshState.shops);
+    setActiveShop(freshState.activeShop);
+    setPayrollDue(freshState.payrollDue);
+    setHasCar(freshState.hasCar);
+    setDaysCompleted(freshState.daysCompleted);
+    setRenderTrigger(value => value + 1);
+    saveLocalRestaurantGameState(freshState);
+
+    if (profile) {
+      const res = await client.game?.saveRestaurantState(freshState);
+      setMessage(res?.error ? "Game reset locally. Remote reset failed." : "Game reset.");
+    } else {
+      setMessage("Game reset.");
     }
     setTimeout(() => setMessage(""), 2000);
   };
@@ -1194,6 +1260,9 @@ export function RestaurantGamePage() {
           )}
           <button onClick={saveProgress} className="bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded transition text-sm">
             💾 Save
+          </button>
+          <button onClick={resetGame} className="bg-red-700 hover:bg-red-600 px-4 py-2 rounded transition text-sm">
+            Reset
           </button>
         </div>
       </div>
