@@ -440,7 +440,15 @@ export interface RestaurantGameState {
   money: number;
   tables: number;
   helpers: number;
+  cashiers?: number;
   shops?: number;
   activeShop?: number;
   payrollDue?: number;
+  hasCar?: boolean;
+  daysCompleted?: number;
+  shopStates?: Array<{
+    tables: number;
+    helpers: number;
+    cashiers: number;
+  }>;
 }

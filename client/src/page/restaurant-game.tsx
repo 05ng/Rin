@@ -20,8 +20,11 @@ const TABLE_COST = 50;
 const HELPER_COST = 60;
 const CASHIER_COST = 40;
 const SHOP_COST = 200;
+const CAR_COST = 1000;
 const HELPER_DAILY_SALARY = 20;
 const CASHIER_DAILY_SALARY = 10;
+const SHOP_DAILY_RENT = 50;
+const TABLE_WRITE_OFF_INTERVAL_DAYS = 2;
 const RESTAURANT_GAME_STATE_KEY = "restaurant_game_state";
 
 const TABLE_SELL_VALUE = TABLE_COST;
@@ -50,6 +53,7 @@ const OWNER_SPAWN = { x: GAME_WIDTH - 200, y: GAME_HEIGHT - 50 };
 const HELPER_SPAWN = { x: GAME_WIDTH - 250, y: GAME_HEIGHT - 50 };
 const CASHIER_SPAWN = { x: GAME_WIDTH - 350, y: GAME_HEIGHT - 50 };
 const GATE_POS = { x: 110, y: GAME_HEIGHT - 55 };
+const CAR_POS = { x: 50, y: GAME_HEIGHT - 55 };
 const GATE_TRIGGER_DISTANCE = 28;
 
 // --- Entity Types ---
@@ -250,6 +254,8 @@ type SavedRestaurantGameState = {
   shops: number;
   activeShop: number;
   payrollDue: number;
+  hasCar: boolean;
+  daysCompleted: number;
   shopStates: SavedShopState[];
 };
 
@@ -298,6 +304,8 @@ function normalizeSavedRestaurantGameState(raw: unknown): SavedRestaurantGameSta
     shops,
     activeShop,
     payrollDue: readSavedNumber(state.payrollDue, 0, 0),
+    hasCar: Boolean(state.hasCar),
+    daysCompleted: readSavedNumber(state.daysCompleted, 0, 0),
     shopStates,
   };
 }
@@ -339,6 +347,8 @@ export function RestaurantGamePage() {
     cashiersCount: 0,
     shopCount: 1,
     activeShop: 1,
+    hasCar: false,
+    daysCompleted: 0,
     ownerManualTarget: undefined as Pos | undefined,
     pendingGateTravel: false,
     customerIdCounter: 1,
@@ -353,6 +363,8 @@ export function RestaurantGamePage() {
   const [shopCount, setShopCount] = useState(1);
   const [activeShop, setActiveShop] = useState(1);
   const [payrollDue, setPayrollDue] = useState(0);
+  const [hasCar, setHasCar] = useState(false);
+  const [daysCompleted, setDaysCompleted] = useState(0);
 
   const savedStateLoaded = useRef(false);
   const remoteStateLoaded = useRef(false);
@@ -455,9 +467,13 @@ export function RestaurantGamePage() {
       setMoney(loadedState.money);
       setShopCount(loadedState.shops);
       setPayrollDue(loadedState.payrollDue);
+      setHasCar(loadedState.hasCar);
+      setDaysCompleted(loadedState.daysCompleted);
 
       stateRef.current.money = loadedState.money;
       stateRef.current.shopCount = loadedState.shops;
+      stateRef.current.hasCar = loadedState.hasCar;
+      stateRef.current.daysCompleted = loadedState.daysCompleted;
       stateRef.current.shops = loadedState.shopStates.map(createShopRuntimeState);
       activateShop(loadedState.activeShop, undefined, false);
 
@@ -484,7 +500,7 @@ export function RestaurantGamePage() {
   const startOpeningTest = () => {
     if (dayRunning) return;
     if (payrollDue > 0) {
-      setMessage(`Pay the remaining $${payrollDue} staff salary before opening.`);
+      setMessage(`Pay the remaining $${payrollDue} daily costs before opening.`);
       setTimeout(() => setMessage(""), 2400);
       return;
     }
@@ -549,6 +565,8 @@ export function RestaurantGamePage() {
       shops,
       activeShop: activeShopNumber,
       payrollDue: Math.max(0, payrollDue),
+      hasCar: currentState.hasCar,
+      daysCompleted: currentState.daysCompleted,
       shopStates,
     };
     saveLocalRestaurantGameState(st);
@@ -568,7 +586,7 @@ export function RestaurantGamePage() {
     const remaining = payrollDue - amount;
     if (remaining > 0) {
       setPayrollDue(remaining);
-      setMessage(`Sold asset for $${amount}. Payroll still needs $${remaining}.`);
+      setMessage(`Sold asset for $${amount}. Daily costs still need $${remaining}.`);
       return;
     }
 
@@ -578,7 +596,7 @@ export function RestaurantGamePage() {
       setMoney(stateRef.current.money);
     }
     setPayrollDue(0);
-    setMessage("Staff salary paid. The shop can open again.");
+    setMessage("Daily costs paid. The shop can open again.");
   };
 
   const travelToNextShop = useCallback(() => {
@@ -588,34 +606,75 @@ export function RestaurantGamePage() {
     setMessage(`Moved through the gate to Shop #${nextShop}.`);
   }, [activateShop]);
 
+  const driveToShop = (shopNumber: number) => {
+    const s = stateRef.current;
+    if (!s.hasCar) {
+      setMessage("Buy a car before driving between shops.");
+      setTimeout(() => setMessage(""), 2000);
+      return;
+    }
+
+    if (shopNumber === s.activeShop) {
+      setMessage(`Already at Shop #${shopNumber}.`);
+      setTimeout(() => setMessage(""), 1600);
+      return;
+    }
+
+    activateShop(shopNumber, { x: CAR_POS.x + 70, y: CAR_POS.y });
+    setMessage(`Drove to Shop #${shopNumber}.`);
+  };
+
   const handleDayEnd = useCallback(() => {
     persistActiveShopRuntime();
     const s = stateRef.current;
-    const salaryDue = s.shops.reduce((total, shop) => {
+    const staffSalaryDue = s.shops.reduce((total, shop) => {
       return total
         + shop.helpers.length * HELPER_DAILY_SALARY
         + shop.cashiers.length * CASHIER_DAILY_SALARY;
     }, 0);
+    const rentDue = s.shopCount * SHOP_DAILY_RENT;
+    const totalDue = staffSalaryDue + rentDue;
 
-    if (salaryDue === 0) {
-      setMessage("Day over! Finishing up active customers...");
-      return;
+    s.daysCompleted += 1;
+    setDaysCompleted(s.daysCompleted);
+
+    let writeOffNote = "";
+    if (s.daysCompleted % TABLE_WRITE_OFF_INTERVAL_DAYS === 0) {
+      let writtenOffShopNumber: number | null = null;
+
+      for (let offset = 0; offset < s.shopCount; offset++) {
+        const shopIndex = (s.activeShop - 1 + offset) % s.shopCount;
+        const shop = ensureShopRuntime(shopIndex + 1);
+        const tableIndex = shop.tables.findLastIndex((table, index) => index > 0 && table.state === "empty");
+        if (tableIndex > 0) {
+          shop.tables.splice(tableIndex, 1);
+          writtenOffShopNumber = shopIndex + 1;
+          if (writtenOffShopNumber === s.activeShop) {
+            setTableCount(shop.tables.length);
+          }
+          break;
+        }
+      }
+
+      writeOffNote = writtenOffShopNumber
+        ? ` One empty table was written off from Shop #${writtenOffShopNumber}.`
+        : " No extra empty table was available for write-off.";
     }
 
-    if (s.money >= salaryDue) {
-      s.money -= salaryDue;
+    if (s.money >= totalDue) {
+      s.money -= totalDue;
       setMoney(s.money);
       setPayrollDue(0);
-      setMessage(`Day over! Paid $${salaryDue} staff salary.`);
+      setMessage(`Day over! Paid $${totalDue} daily costs ($${rentDue} rent, $${staffSalaryDue} staff).${writeOffNote}`);
       return;
     }
 
-    const remaining = salaryDue - s.money;
+    const remaining = totalDue - s.money;
     s.money = 0;
     setMoney(0);
     setPayrollDue(remaining);
-    setMessage(`Day over! Staff salary still needs $${remaining}. Sell a table or shop to pay it.`);
-  }, [persistActiveShopRuntime]);
+    setMessage(`Day over! Daily costs still need $${remaining} ($${rentDue} rent, $${staffSalaryDue} staff). Sell a table or shop to pay it.${writeOffNote}`);
+  }, [ensureShopRuntime, persistActiveShopRuntime]);
 
   // Main Game Loop
   useEffect(() => {
@@ -977,8 +1036,25 @@ export function RestaurantGamePage() {
       s.shops.push(createShopRuntimeState({ tables: 1, helpers: 0, cashiers: 0 }));
       setMoney(s.money);
       setShopCount(s.shopCount);
-      setMessage(`Bought Shop #${s.shopCount}. Use the gate to visit it.`);
+      setMessage(`Bought Shop #${s.shopCount}. ${s.hasCar ? "Use the car or gate to visit it." : "Use the gate to visit it."}`);
     }
+  };
+
+  const buyCar = () => {
+    const s = stateRef.current;
+    if (s.hasCar) {
+      setMessage("You already own a car.");
+      setTimeout(() => setMessage(""), 1600);
+      return;
+    }
+
+    if (s.money < CAR_COST) return;
+
+    s.money -= CAR_COST;
+    s.hasCar = true;
+    setMoney(s.money);
+    setHasCar(true);
+    setMessage("Bought a car. You can now drive directly to any shop.");
   };
 
   const sellTableForPayroll = () => {
@@ -1073,6 +1149,7 @@ export function RestaurantGamePage() {
   const s = stateRef.current;
   const canSellTableForPayroll = payrollDue > 0 && s.tables.some((table, index) => index > 0 && table.state === "empty");
   const canSellShopForPayroll = payrollDue > 0 && shopCount > 1;
+  const shopTravelNumbers = Array.from({ length: shopCount }, (_, index) => index + 1);
 
   return (
     <div className="flex flex-col h-full min-h-screen bg-gray-900 text-white select-none">
@@ -1091,9 +1168,15 @@ export function RestaurantGamePage() {
           <div className="text-sm font-semibold text-zinc-300">
             Shops {activeShop}/{shopCount}
           </div>
+          <div className="text-sm font-semibold text-zinc-300">
+            Day {daysCompleted + 1}
+          </div>
+          <div className="text-xs font-semibold text-zinc-400">
+            Rent ${SHOP_DAILY_RENT}/shop/day
+          </div>
           {payrollDue > 0 && (
             <div className="rounded border border-red-500 bg-red-950/60 px-3 py-1 text-sm font-bold text-red-100">
-              Salary due: ${payrollDue}
+              Costs due: ${payrollDue}
             </div>
           )}
         </div>
@@ -1214,7 +1297,7 @@ export function RestaurantGamePage() {
 
       {payrollDue > 0 && (
         <div className="flex flex-wrap items-center justify-center gap-3 border-y border-red-500/40 bg-red-950/60 p-3 text-sm text-red-50 shadow-inner z-10">
-          <span className="font-bold">Staff salary still needs ${payrollDue}.</span>
+          <span className="font-bold">Daily costs still need ${payrollDue}.</span>
           <button
             onClick={sellTableForPayroll}
             disabled={!canSellTableForPayroll}
@@ -1248,6 +1331,27 @@ export function RestaurantGamePage() {
           <span>🏪 Buy Shop (${SHOP_COST})</span>
           <span className="bg-sky-800 px-2 rounded-full">{shopCount}</span>
         </button>
+        <button
+          onClick={buyCar} disabled={hasCar || money < CAR_COST}
+          className="bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:hover:bg-amber-600 px-4 py-2 rounded transition text-sm flex items-center gap-2"
+        >
+          <span>🚗 {hasCar ? "Car Owned" : `Buy Car ($${CAR_COST})`}</span>
+        </button>
+        {hasCar && shopCount > 1 && (
+          <div className="flex flex-wrap items-center gap-2 rounded bg-zinc-800/70 px-3 py-2 text-sm">
+            <span className="font-semibold text-zinc-200">Drive</span>
+            {shopTravelNumbers.map(shopNumber => (
+              <button
+                key={`drive-shop-${shopNumber}`}
+                onClick={() => driveToShop(shopNumber)}
+                disabled={shopNumber === activeShop}
+                className="rounded bg-amber-700 px-2 py-1 font-bold text-white hover:bg-amber-600 disabled:bg-zinc-700 disabled:text-zinc-400"
+              >
+                #{shopNumber}
+              </button>
+            ))}
+          </div>
+        )}
         <button
           onClick={hireHelper} disabled={money < HELPER_COST}
           className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:hover:bg-purple-600 px-4 py-2 rounded transition text-sm flex items-center gap-2"
@@ -1297,6 +1401,17 @@ export function RestaurantGamePage() {
           <div className="absolute left-1/2 top-2 -translate-x-1/2 rounded bg-zinc-800/90 px-3 py-1 text-xs font-bold uppercase tracking-widest text-zinc-300">
             Shop #{activeShop}
           </div>
+
+          {/* Car */}
+          {hasCar && (
+            <div
+              className="absolute -ml-10 -mt-8 flex h-16 w-20 cursor-pointer items-center justify-center rounded-lg border-4 border-amber-400 bg-amber-900/70 shadow-lg transition hover:bg-amber-800/80"
+              style={{ transform: `translate(${CAR_POS.x}px, ${CAR_POS.y}px)` }}
+              title="Use the drive buttons to go directly to any shop"
+            >
+              <span className="text-4xl">🚗</span>
+            </div>
+          )}
 
           {/* Gate */}
           <div
