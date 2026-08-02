@@ -1316,29 +1316,29 @@ export function RestaurantGamePage() {
       )}
 
       {/* Upgrades Bar */}
-      <div className="flex flex-wrap justify-center gap-4 p-2 bg-gray-700 shadow-inner z-10">
+      <div className="grid grid-cols-2 gap-2 bg-gray-700 p-2 shadow-inner sm:flex sm:flex-wrap sm:justify-center">
         <button
           onClick={buyTable} disabled={money < TABLE_COST || tableCount >= 9}
-          className="bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:hover:bg-orange-600 px-4 py-2 rounded transition text-sm flex items-center gap-2"
+          className="flex min-w-0 items-center justify-between gap-1 rounded bg-orange-600 px-2 py-1.5 text-xs transition hover:bg-orange-500 disabled:opacity-50 disabled:hover:bg-orange-600 sm:gap-2 sm:px-3 sm:text-sm"
         >
-          <span>🪑 Buy Table (${TABLE_COST})</span>
-          <span className="bg-orange-800 px-2 rounded-full">{tableCount}/9</span>
+          <span className="truncate">🪑 Table (${TABLE_COST})</span>
+          <span className="shrink-0 rounded-full bg-orange-800 px-1.5">{tableCount}/9</span>
         </button>
         <button
           onClick={buyShop} disabled={money < SHOP_COST}
-          className="bg-sky-600 hover:bg-sky-500 disabled:opacity-50 disabled:hover:bg-sky-600 px-4 py-2 rounded transition text-sm flex items-center gap-2"
+          className="flex min-w-0 items-center justify-between gap-1 rounded bg-sky-600 px-2 py-1.5 text-xs transition hover:bg-sky-500 disabled:opacity-50 disabled:hover:bg-sky-600 sm:gap-2 sm:px-3 sm:text-sm"
         >
-          <span>🏪 Buy Shop (${SHOP_COST})</span>
-          <span className="bg-sky-800 px-2 rounded-full">{shopCount}</span>
+          <span className="truncate">🏪 Shop (${SHOP_COST})</span>
+          <span className="shrink-0 rounded-full bg-sky-800 px-1.5">{shopCount}</span>
         </button>
         <button
           onClick={buyCar} disabled={hasCar || money < CAR_COST}
-          className="bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:hover:bg-amber-600 px-4 py-2 rounded transition text-sm flex items-center gap-2"
+          className="flex min-w-0 items-center justify-center rounded bg-amber-600 px-2 py-1.5 text-xs transition hover:bg-amber-500 disabled:opacity-50 disabled:hover:bg-amber-600 sm:px-3 sm:text-sm"
         >
-          <span>🚗 {hasCar ? "Car Owned" : `Buy Car ($${CAR_COST})`}</span>
+          <span className="truncate">🚗 {hasCar ? "Owned" : `Car ($${CAR_COST})`}</span>
         </button>
         {hasCar && shopCount > 1 && (
-          <div className="flex flex-wrap items-center gap-2 rounded bg-zinc-800/70 px-3 py-2 text-sm">
+          <div className="order-last col-span-2 flex flex-wrap items-center gap-1 rounded bg-zinc-800/70 px-2 py-1.5 text-xs sm:gap-2 sm:px-3 sm:text-sm">
             <span className="font-semibold text-zinc-200">Drive</span>
             {shopTravelNumbers.map(shopNumber => (
               <button
@@ -1354,31 +1354,31 @@ export function RestaurantGamePage() {
         )}
         <button
           onClick={hireHelper} disabled={money < HELPER_COST}
-          className="bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:hover:bg-purple-600 px-4 py-2 rounded transition text-sm flex items-center gap-2"
+          className="flex min-w-0 items-center justify-between gap-1 rounded bg-purple-600 px-2 py-1.5 text-xs transition hover:bg-purple-500 disabled:opacity-50 disabled:hover:bg-purple-600 sm:gap-2 sm:px-3 sm:text-sm"
         >
-          <span>🧑‍🍳 Hire Helper (${HELPER_COST})</span>
-          <span className="bg-purple-800 px-2 rounded-full">{helperCount}</span>
+          <span className="truncate">🧑‍🍳 Helper (${HELPER_COST})</span>
+          <span className="shrink-0 rounded-full bg-purple-800 px-1.5">{helperCount}</span>
         </button>
         <button
           onClick={layoffHelper}
           disabled={helperCount === 0 || money < HELPER_DAILY_SALARY}
-          className="bg-purple-900 hover:bg-purple-800 disabled:opacity-50 disabled:hover:bg-purple-900 px-4 py-2 rounded transition text-sm flex items-center gap-2"
+          className="flex min-w-0 items-center justify-center rounded bg-purple-900 px-2 py-1.5 text-xs transition hover:bg-purple-800 disabled:opacity-50 disabled:hover:bg-purple-900 sm:px-3 sm:text-sm"
         >
-          <span>Lay Off Helper (${HELPER_DAILY_SALARY})</span>
+          <span className="truncate">Helper -${HELPER_DAILY_SALARY}</span>
         </button>
         <button
           onClick={hireCashier} disabled={money < CASHIER_COST}
-          className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:hover:bg-emerald-600 px-4 py-2 rounded transition text-sm flex items-center gap-2"
+          className="flex min-w-0 items-center justify-between gap-1 rounded bg-emerald-600 px-2 py-1.5 text-xs transition hover:bg-emerald-500 disabled:opacity-50 disabled:hover:bg-emerald-600 sm:gap-2 sm:px-3 sm:text-sm"
         >
-          <span>🧑‍💼 Hire Cashier (${CASHIER_COST})</span>
-          <span className="bg-emerald-800 px-2 rounded-full">{cashierCount}</span>
+          <span className="truncate">🧑‍💼 Cashier (${CASHIER_COST})</span>
+          <span className="shrink-0 rounded-full bg-emerald-800 px-1.5">{cashierCount}</span>
         </button>
         <button
           onClick={layoffCashier}
           disabled={cashierCount === 0 || money < CASHIER_DAILY_SALARY}
-          className="bg-emerald-900 hover:bg-emerald-800 disabled:opacity-50 disabled:hover:bg-emerald-900 px-4 py-2 rounded transition text-sm flex items-center gap-2"
+          className="flex min-w-0 items-center justify-center rounded bg-emerald-900 px-2 py-1.5 text-xs transition hover:bg-emerald-800 disabled:opacity-50 disabled:hover:bg-emerald-900 sm:px-3 sm:text-sm"
         >
-          <span>Lay Off Cashier (${CASHIER_DAILY_SALARY})</span>
+          <span className="truncate">Cashier -${CASHIER_DAILY_SALARY}</span>
         </button>
       </div>
 
