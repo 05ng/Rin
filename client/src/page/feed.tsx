@@ -288,27 +288,27 @@ export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?
                       ))}
                     </nav>
                   </div>
-                  <div className="flex justify-end pt-0 sm:pt-2">
+                  <div className="flex justify-end sm:self-end">
                     {profile?.permission && (
-                      <div className="flex gap-2">
+                      <div className="flex items-center gap-2">
                         <button
                           aria-label={top > 0 ? t("untop.title") : t("top.title")}
                           onClick={topFeed}
-                          className={`flex-1 flex flex-col items-end justify-center px-2 py rounded-full transition ${top > 0 ? "bg-theme text-white hover:bg-theme-hover active:bg-theme-active" : "bg-secondary bg-button dark:text-neutral-400"}`}
+                          className={`flex size-8 items-center justify-center rounded-full transition ${top > 0 ? "bg-theme text-white hover:bg-theme-hover active:bg-theme-active" : "bg-secondary bg-button dark:text-neutral-400"}`}
                         >
                           <i className="ri-skip-up-line" />
                         </button>
                         <Link
                           aria-label={t("edit")}
                           href={`/admin/writing/${feed.id}`}
-                          className="flex-1 flex flex-col items-end justify-center px-2 py bg-secondary bg-button rounded-full transition"
+                          className="flex size-8 items-center justify-center rounded-full bg-secondary bg-button transition"
                         >
                           <i className="ri-edit-2-line dark:text-neutral-400" />
                         </Link>
                         <button
                           aria-label={t("delete.title")}
                           onClick={deleteFeed}
-                          className="flex-1 flex flex-col items-end justify-center px-2 py bg-secondary bg-button rounded-full transition"
+                          className="flex size-8 items-center justify-center rounded-full bg-secondary bg-button transition"
                         >
                           <i className="ri-delete-bin-7-line text-red-500" />
                         </button>
