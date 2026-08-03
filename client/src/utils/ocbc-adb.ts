@@ -34,10 +34,15 @@ export function calculateOcbcAdbTransfer({
   currentBalance,
   transferDate,
 }: OcbcAdbCalculationInput): OcbcAdbCalculation | null {
-  const values = [currentAdb, adbIncrease, targetIncrease, currentBalance];
-  if (!Number.isFinite(transferDate.getTime()) || values.some((value) => !Number.isFinite(value) || value < 0)) {
+  if (
+    !Number.isFinite(transferDate.getTime())
+    || !Number.isFinite(adbIncrease)
+    || [currentAdb, targetIncrease, currentBalance].some((value) => !Number.isFinite(value) || value < 0)
+  ) {
     return null;
   }
+
+  const values = [currentAdb, adbIncrease, targetIncrease, currentBalance];
 
   const [currentAdbCents, adbIncreaseCents, targetIncreaseCents, currentBalanceCents] = values.map(toCents);
   const daysInMonth = getDaysInMonth(transferDate);

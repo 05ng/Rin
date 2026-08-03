@@ -30,11 +30,11 @@ function parseDate(value: string) {
   return new Date(`${value}T12:00:00`);
 }
 
-function parseMoney(value: string) {
+function parseMoney(value: string, allowNegative = false) {
   const cleaned = value.replaceAll(",", "").trim();
   if (!cleaned) return null;
   const amount = Number(cleaned);
-  return Number.isFinite(amount) && amount >= 0 ? amount : null;
+  return Number.isFinite(amount) && (allowNegative || amount >= 0) ? amount : null;
 }
 
 function CurrencyInput({
@@ -43,12 +43,14 @@ function CurrencyInput({
   hint,
   value,
   onChange,
+  allowNegative = false,
 }: {
   id: string;
   label: string;
   hint: string;
   value: string;
   onChange: (value: string) => void;
+  allowNegative?: boolean;
 }) {
   return (
     <label className="block" htmlFor={id}>
@@ -62,8 +64,8 @@ function CurrencyInput({
           id={id}
           className="w-full rounded-xl border border-black/10 bg-white py-2 pl-14 pr-4 text-neutral-900 shadow-none transition-colors placeholder:text-neutral-400 focus:border-black/20 focus:outline-none focus:ring-2 focus:ring-theme/10 dark:border-white/10 dark:bg-dark dark:text-white dark:focus:border-white/20"
           inputMode="decimal"
-          min="0"
-          placeholder="0.00"
+          min={allowNegative ? undefined : "0"}
+          placeholder={allowNegative ? "-0.00" : "0.00"}
           type="text"
           value={value}
           onChange={(event) => onChange(event.target.value)}
@@ -82,7 +84,12 @@ export function OcbcAdbCalculatorZhCnPage() {
   const [transferDate, setTransferDate] = useState(() => toDateInputValue(new Date()));
 
   const calculation = useMemo(() => {
-    const values = [currentAdb, adbIncrease, targetIncrease, currentBalance].map(parseMoney);
+    const values = [
+      parseMoney(currentAdb),
+      parseMoney(adbIncrease, true),
+      parseMoney(targetIncrease),
+      parseMoney(currentBalance),
+    ];
     if (values.some((value) => value === null)) return null;
 
     return calculateOcbcAdbTransfer({
@@ -134,6 +141,7 @@ export function OcbcAdbCalculatorZhCnPage() {
                 hint="OCBC 本月目前显示的增幅。"
                 value={adbIncrease}
                 onChange={setAdbIncrease}
+                allowNegative
               />
               <CurrencyInput
                 id="target-increase"

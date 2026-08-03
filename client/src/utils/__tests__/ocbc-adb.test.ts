@@ -25,6 +25,20 @@ describe("calculateOcbcAdbTransfer", () => {
     });
   });
 
+  it("accepts a negative reported ADB increase versus last month", () => {
+    const result = calculateOcbcAdbTransfer({
+      currentAdb: 1_000,
+      adbIncrease: -200,
+      targetIncrease: 100,
+      currentBalance: 1_000,
+      transferDate: new Date(2026, 1, 1),
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.baselineAdb).toBe(1_200);
+    expect(result?.targetAdb).toBe(1_300);
+  });
+
   it("returns a negative transfer amount when money needs to be transferred in", () => {
     const result = calculateOcbcAdbTransfer({
       currentAdb: 1_000,
