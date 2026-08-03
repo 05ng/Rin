@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useContext, useCallback } from "react";
 import type { MouseEvent } from "react";
+import { Helmet } from "react-helmet-async";
+import { useTranslation } from "react-i18next";
 import { client } from "../app/runtime";
+import { useSiteConfig } from "../hooks/useSiteConfig";
 import { ProfileContext } from "../state/profile";
 
 type OrderType = "burger" | "hotdog" | "icecream" | "coffee";
@@ -340,6 +343,8 @@ function createInitialRestaurantGameState(): SavedRestaurantGameState {
 
 export function RestaurantGamePage() {
   const profile = useContext(ProfileContext);
+  const siteConfig = useSiteConfig();
+  const { t } = useTranslation();
 
   // High-level state
   const [money, setMoney] = useState(0);
@@ -1219,6 +1224,9 @@ export function RestaurantGamePage() {
 
   return (
     <div className="flex flex-col h-full min-h-screen bg-gray-900 text-white select-none">
+      <Helmet>
+        <title>{`${siteConfig.name} - ${t("restaurant_title", "Burger Shop")}`}</title>
+      </Helmet>
 
       {/* Top UI Bar */}
       <div className="flex flex-wrap justify-between items-center p-4 bg-gray-800 shadow-md z-10">

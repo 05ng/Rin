@@ -1,11 +1,14 @@
 import { Canvas } from '@react-three/fiber';
-import { World } from '../components/minecraft/World';
-import { useStore, BlockType } from '../components/minecraft/store';
+import { Helmet } from 'react-helmet-async';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'wouter';
+import { World } from '../components/minecraft/World';
+import { useStore, BlockType } from '../components/minecraft/store';
+import { useSiteConfig } from '../hooks/useSiteConfig';
 
 export function MinecraftGamePage() {
   const { t } = useTranslation();
+  const siteConfig = useSiteConfig();
   const { selectedBlockType, setSelectedBlockType, mode, setMode, resetWorld } = useStore();
 
   const blocks: { type: BlockType; color: string; name: string }[] = [
@@ -17,6 +20,10 @@ export function MinecraftGamePage() {
 
   return (
     <div className='flex h-[100dvh] w-full flex-col bg-slate-900 overflow-hidden relative'>
+      <Helmet>
+        <title>{`${siteConfig.name} - ${t('minecraft_title', 'Voxel Builder')}`}</title>
+      </Helmet>
+
       {/* Header */}
       <header className='absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-4 bg-slate-900/50 backdrop-blur-md pointer-events-auto'>
         <Link href="/game" className='flex items-center gap-2 text-white hover:text-sky-300 transition-colors'>
