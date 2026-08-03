@@ -232,7 +232,7 @@ export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?
                 className="rounded-2xl bg-w m-2 px-6 py-4"
                 aria-label={feed.title ?? "Unnamed"}
               >
-                <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+                <div className="flex flex-col gap-3">
                   <div className="min-w-0 w-full">
                     <div className="mt-1 mb-1 flex gap-1">
                       <p
@@ -288,7 +288,7 @@ export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?
                       ))}
                     </nav>
                   </div>
-                  <div className="flex justify-end sm:self-end">
+                  <div className="flex w-full justify-end">
                     {profile?.permission && (
                       <div className="flex items-center gap-2">
                         <button
