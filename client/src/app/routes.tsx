@@ -158,6 +158,16 @@ export function AppRoutes() {
         <OcbcAdbCalculatorPage />
       </AppRoute>
 
+      <AppRoute path="/:lang">
+        {(params) => {
+          const lang = params.lang || "";
+          if (lang === "en" || lang === "zh-CN") {
+            return <FeedsPage routeLang={lang} />;
+          }
+          return <ErrorPage error={t("error.not_found")} />;
+        }}
+      </AppRoute>
+
       <TocRoute path="/feed/:id">
         {(params, toc, cleanup) => <FeedPage id={params.id || ""} routeLang="en" TOC={toc} clean={cleanup} />}
       </TocRoute>

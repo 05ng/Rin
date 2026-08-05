@@ -24,13 +24,14 @@ type FeedsMap = {
     [key in FeedType]: FeedsData
 }
 
-export function FeedsPage() {
+export function FeedsPage({ routeLang }: { routeLang?: ArticleLanguage }) {
     const { t, i18n } = useTranslation()
     const siteConfig = useSiteConfig();
     const query = new URLSearchParams(useSearch());
     const profile = useContext(ProfileContext);
     const [listState, _setListState] = useState<FeedType>(query.get("type") as FeedType || 'normal')
-    const language: ArticleLanguage = i18n.resolvedLanguage === "zh-CN" ? "zh-CN" : "en";
+    const resolvedLanguage: ArticleLanguage = i18n.resolvedLanguage === "zh-CN" ? "zh-CN" : "en";
+    const language: ArticleLanguage = routeLang ?? resolvedLanguage;
     const [status, setStatus] = useState<'loading' | 'idle'>('idle')
     const [feeds, setFeeds] = useState<FeedsMap>({
         draft: { size: 0, data: [], hasNext: false },
@@ -42,12 +43,13 @@ export function FeedsPage() {
     const feedListClass = siteConfig.feedLayout === "masonry" ? "wauto columns-1 gap-5 ani-show md:columns-2" : "wauto flex flex-col ani-show";
     const currentFeeds = feeds[listState] ?? { size: 0, data: [], hasNext: false };
     const currentFeedData = Array.isArray(currentFeeds.data) ? currentFeeds.data : [];
-    const articleHref = (nextPage = page) => {
+    const articleHref = (nextPage = page, nextType = listState) => {
         const params = new URLSearchParams();
-        if (listState !== "normal") params.set("type", listState);
+        const path = language === "zh-CN" ? "/zh-CN" : "/";
+        if (nextType !== "normal") params.set("type", nextType);
         if (nextPage > 1) params.set("page", nextPage.toString());
         const queryString = params.toString();
-        return queryString ? `/?${queryString}` : "/";
+        return queryString ? `${path}?${queryString}` : path;
     };
     const ref = useRef("")
     function fetchFeeds(type: FeedType) {
@@ -66,6 +68,12 @@ export function FeedsPage() {
             }
         })
     }
+    useEffect(() => {
+        if (routeLang && routeLang !== resolvedLanguage) {
+            i18n.changeLanguage(routeLang);
+        }
+    }, [i18n, resolvedLanguage, routeLang])
+
     useEffect(() => {
         const key = `${query.get("page")} ${query.get("type")} ${language} ${limit}`
         if (ref.current == key) return
@@ -91,10 +99,10 @@ export function FeedsPage() {
                             </p>
                             {profile?.permission &&
                                 <div className="flex flex-row space-x-4">
-                                    <Link href={listState === 'draft' ? '/?type=normal' : '/?type=draft'} className={`text-sm mt-4 text-neutral-500 font-normal ${listState === 'draft' ? "text-theme" : ""}`}>
+                                    <Link href={articleHref(1, listState === 'draft' ? 'normal' : 'draft')} className={`text-sm mt-4 text-neutral-500 font-normal ${listState === 'draft' ? "text-theme" : ""}`}>
                                         {t('draft_bin')}
                                     </Link>
-                                    <Link href={listState === 'unlisted' ? '/?type=normal' : '/?type=unlisted'} className={`text-sm mt-4 text-neutral-500 font-normal ${listState === 'unlisted' ? "text-theme" : ""}`}>
+                                    <Link href={articleHref(1, listState === 'unlisted' ? 'normal' : 'unlisted')} className={`text-sm mt-4 text-neutral-500 font-normal ${listState === 'unlisted' ? "text-theme" : ""}`}>
                                         {t('unlisted')}
                                     </Link>
                                 </div>
