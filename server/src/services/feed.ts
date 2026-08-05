@@ -566,10 +566,19 @@ export function FeedService(): Hono<{
         const db = c.get('db');
         const cache = c.get('cache');
         const id = c.req.param('id');
+        const languageQuery = c.req.query('language');
+        const language = languageQuery === undefined ? undefined : parseArticleLanguage(languageQuery);
         let id_num = parseFeedId(id);
 
+        if (languageQuery !== undefined && !language) {
+            return c.text('Unsupported article language', 400);
+        }
+
         if (id_num === null) {
-            const aliasRecord = await profileAsync(c, 'feed_adjacent_alias_lookup', () => db.select({ id: feeds.id }).from(feeds).where(eq(feeds.alias, id)));
+            const aliasWhere = language
+                ? and(eq(feeds.alias, id), eq(feeds.language, language))
+                : eq(feeds.alias, id);
+            const aliasRecord = await profileAsync(c, 'feed_adjacent_alias_lookup', () => db.select({ id: feeds.id }).from(feeds).where(aliasWhere));
             if (aliasRecord.length === 0) {
                 return c.text("Not found", 404);
             }
@@ -604,6 +613,7 @@ export function FeedService(): Hono<{
                     hashtags: hashtags_flatten,
                     createdAt: feed.createdAt,
                     updatedAt: feed.updatedAt,
+                    language: feed.language,
                 };
                 cache.set(cacheKey, cacheData);
                 return cacheData;
@@ -613,7 +623,7 @@ export function FeedService(): Hono<{
 
         const getPreviousFeed = async () => {
             const previousFeedCached = await profileAsync(c, 'feed_adjacent_prev_cache', () => cache.getBySuffix(`previous_feed_${id_num}`));
-            if (previousFeedCached && previousFeedCached.length > 0) {
+            if (previousFeedCached && previousFeedCached.length > 0 && previousFeedCached[0]?.language === current_language) {
                 return previousFeedCached[0];
             } else {
                 const tempPreviousFeed = await profileAsync(c, 'feed_adjacent_prev_db', () => db.query.feeds.findFirst({
@@ -633,7 +643,7 @@ export function FeedService(): Hono<{
 
         const getNextFeed = async () => {
             const nextFeedCached = await profileAsync(c, 'feed_adjacent_next_cache', () => cache.getBySuffix(`next_feed_${id_num}`));
-            if (nextFeedCached && nextFeedCached.length > 0) {
+            if (nextFeedCached && nextFeedCached.length > 0 && nextFeedCached[0]?.language === current_language) {
                 return nextFeedCached[0];
             } else {
                 const tempNextFeed = await profileAsync(c, 'feed_adjacent_next_db', () => db.query.feeds.findFirst({

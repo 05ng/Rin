@@ -143,6 +143,39 @@ describe('FeedService', () => {
             expect(list.data[0].language).toBe('zh-CN');
         });
 
+        it('should include language in adjacent feeds and ignore stale adjacent cache entries', async () => {
+            sqlite.run(
+                `INSERT INTO feeds (id, alias, title, summary, content, language, listed, draft, uid, created_at, updated_at) VALUES
+                    (101, 'prev-zh', '上一篇', '', 'Previous Chinese content', 'zh-CN', 1, 0, 1, 1000, 1000),
+                    (102, 'middle-zh', '当前篇', '', 'Middle Chinese content', 'zh-CN', 1, 0, 1, 2000, 2000),
+                    (103, 'next-zh', '下一篇', '', 'Next Chinese content', 'zh-CN', 1, 0, 1, 3000, 3000),
+                    (104, 'next-en', 'Next EN', '', 'Next English content', 'en', 1, 0, 1, 4000, 4000)`
+            );
+
+            const originalGetBySuffix = cache.getBySuffix.bind(cache);
+            cache.getBySuffix = async (suffix: string) => {
+                if (suffix === 'previous_feed_102') {
+                    return [{ id: 999, alias: 'stale-prev', title: 'Stale previous' }];
+                }
+                return originalGetBySuffix(suffix);
+            };
+
+            const response = await app.request('/adjacent/102', { method: 'GET' }, env);
+            expect(response.status).toBe(200);
+
+            const data = await response.json() as any;
+            expect(data.previousFeed).toEqual(expect.objectContaining({
+                id: 101,
+                alias: 'prev-zh',
+                language: 'zh-CN',
+            }));
+            expect(data.nextFeed).toEqual(expect.objectContaining({
+                id: 103,
+                alias: 'next-zh',
+                language: 'zh-CN',
+            }));
+        });
+
         it('should filter drafts for non-admin users', async () => {
             // Create a draft feed
             await app.request('/', {
