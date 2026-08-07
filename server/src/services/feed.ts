@@ -45,6 +45,8 @@ function parseArticleLanguage(value: unknown): ArticleLanguage | null {
 }
 
 const DEFAULT_VECTOR_SCORE_THRESHOLD = Number(SERVER_CONFIG_DEFAULTS.get(SEARCH_VECTOR_SCORE_THRESHOLD_KEY) ?? 0.72);
+const PUBLIC_ARTICLE_CONTENT_CACHE_TTL_SECONDS = 60;
+const PUBLIC_ARTICLE_CONTENT_CACHE_PATH = "/__rin_public_article_content";
 
 function parseVectorScoreThreshold(value: unknown) {
     const parsed = typeof value === "number"
@@ -68,6 +70,71 @@ async function getVectorScoreThreshold(serverConfig: { getOrDefault<T>(key: stri
 function articlePath(id: number, alias: string | null, language: ArticleLanguage | string) {
     const path = alias ? `/${encodeURIComponent(alias)}` : `/feed/${id}`;
     return language === "en" ? path : `/${language}${path}`;
+}
+
+function canUsePublicArticleContentCache(admin: boolean, uid: number | null | undefined) {
+    return !admin && !uid;
+}
+
+function getDefaultContentCache() {
+    const globalCaches = (globalThis as typeof globalThis & { caches?: { default?: Cache } }).caches;
+    return globalCaches?.default;
+}
+
+function getPublicArticleContentCacheKey(c: AppContext, id: string, language: ArticleLanguage | undefined) {
+    const url = new URL(c.req.url);
+    url.pathname = `${PUBLIC_ARTICLE_CONTENT_CACHE_PATH}/${encodeURIComponent(id)}`;
+    url.search = "";
+    if (language) {
+        url.searchParams.set("language", language);
+    }
+
+    return new Request(url.toString(), { method: "GET" });
+}
+
+async function getPublicArticleContentCacheResponse(cacheKey: Request) {
+    const contentCache = getDefaultContentCache();
+    if (!contentCache) {
+        return null;
+    }
+
+    try {
+        const cached = await contentCache.match(cacheKey);
+        if (!cached) {
+            return null;
+        }
+
+        const headers = new Headers(cached.headers);
+        headers.set("X-Rin-Article-Cache", "HIT");
+
+        return new Response(cached.body, {
+            status: cached.status,
+            statusText: cached.statusText,
+            headers,
+        });
+    } catch (error) {
+        console.error("Failed to read public article content cache", error);
+        return null;
+    }
+}
+
+function schedulePublicArticleContentCachePut(c: AppContext, cacheKey: Request, response: Response) {
+    const contentCache = getDefaultContentCache();
+    if (!contentCache) {
+        return;
+    }
+
+    const task = contentCache.put(cacheKey, response.clone()).catch((error: unknown) => {
+        console.error("Failed to write public article content cache", error);
+    });
+    const executionCtx = getExecutionContext(c);
+
+    if (executionCtx && typeof executionCtx.waitUntil === "function") {
+        executionCtx.waitUntil(task);
+        return;
+    }
+
+    void task;
 }
 
 function queueArticleVectorizeWorkflow(c: any, feedId: number, options: { isDelete?: boolean; chunkCount?: number } = {}) {
@@ -181,6 +248,12 @@ type FeedVisitStats = {
     pv: number;
     hllData: string;
 } | null;
+
+type FeedStatsTarget = {
+    id: number;
+    draft: number;
+    uid: number;
+};
 
 function buildNextVisitStats(stats: FeedVisitStats, visitorKey: string) {
     const hll = stats?.hllData ? new HyperLogLog(stats.hllData) : new HyperLogLog();
@@ -500,16 +573,81 @@ export function FeedService(): Hono<{
         }
     });
 
-    // GET /feed/:id
-    app.get('/:id', async (c) => {
+    // GET /feed/stats/:id
+    app.get('/stats/:id', async (c) => {
         const db = c.get('db');
-        const cache = c.get('cache');
         const clientConfig = c.get('clientConfig');
         const admin = c.get('admin');
         const uid = c.get('uid');
         const id = c.req.param('id');
         const languageQuery = c.req.query('language');
-        const language = languageQuery === undefined ? undefined : parseArticleLanguage(languageQuery);
+        const language = languageQuery === undefined ? undefined : parseArticleLanguage(languageQuery) ?? undefined;
+        const id_num = parseFeedId(id);
+        const where = id_num === null ? eq(feeds.alias, id) : eq(feeds.id, id_num);
+
+        const feedPromise = profileAsync<FeedStatsTarget | undefined>(c, 'feed_stats_feed_lookup', async () => {
+            const queryOptions = {
+                columns: { id: true, draft: true, uid: true },
+            };
+
+            if (id_num === null && language) {
+                const specificFeed = await db.query.feeds.findFirst({
+                    where: and(eq(feeds.alias, id), eq(feeds.language, language)),
+                    ...queryOptions,
+                }) as FeedStatsTarget | undefined;
+                if (specificFeed) return specificFeed;
+            }
+
+            return await db.query.feeds.findFirst({
+                where,
+                ...queryOptions,
+            }) as FeedStatsTarget | undefined;
+        });
+        const enableVisitPromise = profileAsync(c, 'feed_stats_counter_flag', () => clientConfig.getOrDefault('counter.enabled', true));
+        const [feed, enableVisit] = await Promise.all([feedPromise, enableVisitPromise]);
+
+        if (!feed) {
+            return c.text('Not found', 404);
+        }
+
+        if (feed.draft && feed.uid !== uid && !admin) {
+            return c.text('Permission denied', 403);
+        }
+
+        if (!enableVisit) {
+            return c.json({ pv: 0, uv: 0 }, { headers: { "Cache-Control": "no-store" } });
+        }
+
+        const stats = await profileAsync(c, 'feed_stats_lookup', () => db.query.visitStats.findFirst({
+            where: eq(visitStats.feedId, feed.id),
+            columns: { pv: true, hllData: true },
+        }).then((row) => row ?? null));
+        const visitorKey = c.req.header('cf-connecting-ip') || c.req.header('x-real-ip') || "UNK";
+        const nextStats = buildNextVisitStats(stats, visitorKey);
+        scheduleFeedVisitPersistence(c, db, feed.id, visitorKey, stats);
+
+        return c.json({ pv: nextStats.pv, uv: nextStats.uv }, { headers: { "Cache-Control": "no-store" } });
+    });
+
+    // GET /feed/:id
+    app.get('/:id', async (c) => {
+        const db = c.get('db');
+        const cache = c.get('cache');
+        const admin = c.get('admin');
+        const uid = c.get('uid');
+        const id = c.req.param('id');
+        const languageQuery = c.req.query('language');
+        const language = languageQuery === undefined ? undefined : parseArticleLanguage(languageQuery) ?? undefined;
+        const publicArticleCacheKey = canUsePublicArticleContentCache(admin, uid)
+            ? getPublicArticleContentCacheKey(c, id, language)
+            : null;
+
+        if (publicArticleCacheKey) {
+            const cachedResponse = await profileAsync(c, 'feed_detail_edge_cache', () => getPublicArticleContentCacheResponse(publicArticleCacheKey));
+            if (cachedResponse) {
+                return cachedResponse;
+            }
+        }
         
         const id_num = parseFeedId(id);
         const cacheKey = id_num === null 
@@ -567,35 +705,23 @@ export function FeedService(): Hono<{
                 orderBy: [asc(feeds.language)],
             }));
         const vectorizedPromise = profileAsync(c, 'feed_detail_vector_status', () => getFeedVectorized(db, feed.id));
-        const enableVisitPromise = profileAsync(c, 'feed_detail_counter_flag', () => clientConfig.getOrDefault('counter.enabled', true));
-        const statsPromise = enableVisitPromise.then((enabled) => enabled
-            ? profileAsync(c, 'feed_detail_stats_lookup', () => db.query.visitStats.findFirst({
-                where: eq(visitStats.feedId, feed.id),
-                columns: { pv: true, hllData: true },
-            }).then((row) => row ?? null))
-            : null);
 
-        const [translations, vectorized, enableVisit, stats] = await Promise.all([
+        const [translations, vectorized] = await Promise.all([
             translationsPromise,
             vectorizedPromise,
-            enableVisitPromise,
-            statsPromise,
         ]);
 
         const { hashtags, ...other } = feed;
         const hashtags_flatten = hashtags.map((f: any) => f.hashtag);
-        let pv = 0;
-        let uv = 0;
+        const response = c.json({ ...other, hashtags: hashtags_flatten, translations, pv: 0, uv: 0, vectorized });
 
-        if (enableVisit) {
-            const visitorKey = c.req.header('cf-connecting-ip') || c.req.header('x-real-ip') || "UNK";
-            const nextStats = buildNextVisitStats(stats, visitorKey);
-            pv = nextStats.pv;
-            uv = nextStats.uv;
-            scheduleFeedVisitPersistence(c, db, feed.id, visitorKey, stats);
+        if (publicArticleCacheKey && !feed.draft) {
+            response.headers.set("Cache-Control", `public, max-age=${PUBLIC_ARTICLE_CONTENT_CACHE_TTL_SECONDS}`);
+            response.headers.set("X-Rin-Article-Cache", "MISS");
+            schedulePublicArticleContentCachePut(c, publicArticleCacheKey, response);
         }
 
-        return c.json({ ...other, hashtags: hashtags_flatten, translations, pv, uv, vectorized });
+        return response;
     });
 
     // GET /feed/adjacent/:id

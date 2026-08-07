@@ -255,7 +255,70 @@ describe('FeedService', () => {
             expect(data.title).toBe('Test Feed');
         });
 
-        it('should schedule visit persistence without blocking the detail response', async () => {
+        it('should cache public article content in the edge cache', async () => {
+            const createRes = await app.request('/', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer mock_token_1',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    title: 'Cached Feed',
+                    alias: 'cached-feed',
+                    content: 'Cached Content',
+                    listed: true,
+                    draft: false,
+                    tags: [],
+                }),
+            }, env);
+
+            expect(createRes.status).toBe(200);
+            const cacheStore = new Map<string, Response>();
+            const originalCaches = (globalThis as any).caches;
+            const waitUntilPromises: Promise<unknown>[] = [];
+            const executionCtx = {
+                waitUntil: (promise: Promise<unknown>) => {
+                    waitUntilPromises.push(Promise.resolve(promise));
+                },
+                passThroughOnException: () => {},
+            } as unknown as ExecutionContext;
+
+            (globalThis as any).caches = {
+                default: {
+                    match: async (request: Request) => cacheStore.get(request.url)?.clone(),
+                    put: async (request: Request, response: Response) => {
+                        cacheStore.set(request.url, response.clone());
+                    },
+                },
+            };
+
+            try {
+                const firstRes = await app.request('/cached-feed', { method: 'GET' }, env, executionCtx);
+                expect(firstRes.status).toBe(200);
+                expect(firstRes.headers.get('X-Rin-Article-Cache')).toBe('MISS');
+                expect(waitUntilPromises).toHaveLength(1);
+                await Promise.all(waitUntilPromises);
+
+                waitUntilPromises.length = 0;
+                const secondRes = await app.request('/cached-feed', { method: 'GET' }, env, executionCtx);
+                expect(secondRes.status).toBe(200);
+                expect(secondRes.headers.get('X-Rin-Article-Cache')).toBe('HIT');
+                expect(waitUntilPromises).toHaveLength(0);
+                expect(await secondRes.json() as any).toMatchObject({
+                    title: 'Cached Feed',
+                    content: 'Cached Content',
+                    pv: 0,
+                    uv: 0,
+                });
+            } finally {
+                if (originalCaches === undefined) {
+                    delete (globalThis as any).caches;
+                } else {
+                    (globalThis as any).caches = originalCaches;
+                }
+            }
+        });
+        it('should schedule visit persistence from the stats endpoint without blocking article content', async () => {
             const createRes = await app.request('/', {
                 method: 'POST',
                 headers: {
@@ -281,8 +344,21 @@ describe('FeedService', () => {
                 passThroughOnException: () => {},
             } as unknown as ExecutionContext;
 
-            const firstRes = await app.request(
+            const detailRes = await app.request(
                 `/${createData.insertedId}`,
+                { method: 'GET', headers: { 'cf-connecting-ip': '203.0.113.10' } },
+                env,
+                executionCtx,
+            );
+
+            expect(detailRes.status).toBe(200);
+            const detailData = await detailRes.json() as any;
+            expect(detailData.pv).toBe(0);
+            expect(detailData.uv).toBe(0);
+            expect(waitUntilPromises).toHaveLength(0);
+
+            const firstRes = await app.request(
+                `/stats/${createData.insertedId}`,
                 { method: 'GET', headers: { 'cf-connecting-ip': '203.0.113.10' } },
                 env,
                 executionCtx,
@@ -302,7 +378,7 @@ describe('FeedService', () => {
 
             waitUntilPromises.length = 0;
             const secondRes = await app.request(
-                `/${createData.insertedId}`,
+                `/stats/${createData.insertedId}`,
                 { method: 'GET', headers: { 'cf-connecting-ip': '203.0.113.10' } },
                 env,
                 executionCtx,

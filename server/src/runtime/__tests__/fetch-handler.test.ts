@@ -183,6 +183,34 @@ describe("handleFetch", () => {
     expect(getAppFetch).toHaveBeenCalledTimes(0);
   });
 
+  it("serves prerendered article HTML to normal users when cached", async () => {
+    getStorageObject.mockResolvedValue(new Response("<html>article</html>", {
+      headers: {
+        "Content-Type": "text/html",
+      },
+    }));
+
+    const { handleFetch } = await import("../fetch-handler");
+
+    const response = await handleFetch(
+      new Request("https://agenticlife.org/welcome"),
+      {
+        S3_CACHE_FOLDER: "cache/",
+      } as unknown as Env,
+      {
+        waitUntil: () => {},
+        passThroughOnException: () => {},
+      } as unknown as ExecutionContext
+    );
+
+    expect(await response.text()).toBe("<html>article</html>");
+    expect(response.headers.get("Cache-Control")).toBe("public, max-age=60, stale-while-revalidate=300");
+    expect(response.headers.get("Vary")).toBeNull();
+    expect(response.headers.get("X-Rin-Prerender")).toBe("HIT");
+    expect(getStorageObject).toHaveBeenCalledWith(expect.anything(), "cache/welcome");
+    expect(getAppFetch).toHaveBeenCalledTimes(0);
+  });
+
   it("normalizes stale prerendered SEO HTML before serving it", async () => {
     getStorageObject.mockResolvedValue(new Response(
       '<!doctype html><html lang="en"><head><title>Old</title><meta property="og:type" content="article"><meta property="og:site_name" content=""><meta name="og:description" content="desc"><link rel="canonical" href="https://agenticlife.org/en/lumina-tick"></head><body><a href="/en/lumina-tick">Read</a><p>Use <script> tags safely.</script></p></body></html>',

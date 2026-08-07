@@ -67,6 +67,68 @@ function isStaticAssetRequest(pathname: string) {
   );
 }
 
+function isPrerenderedArticleCandidate(pathname: string) {
+  const articlePathname = pathname.replace(/^\/(?:en|zh-CN)(?=\/)/, "") || "/";
+
+  if (
+    articlePathname === "/" ||
+    articlePathname.startsWith("/admin") ||
+    articlePathname.startsWith("/api") ||
+    isRootFeedRequest(articlePathname) ||
+    isAppPublicRoute(articlePathname) ||
+    isStaticAssetRequest(articlePathname)
+  ) {
+    return false;
+  }
+
+  return /^\/feed\/[1-9]\d*$/.test(articlePathname) || /^\/[^/]+\/?$/.test(articlePathname);
+}
+
+function isPrerenderUserAgent(userAgent: string) {
+  return PRERENDER_USER_AGENTS.some((bot) => userAgent.includes(bot));
+}
+
+async function tryServePrerenderedHtml(request: Request, env: Env, userAgent: string) {
+  if (request.method !== "GET") {
+    return null;
+  }
+
+  const url = new URL(request.url);
+  const pathname = url.pathname;
+  const crawler = isPrerenderUserAgent(userAgent);
+
+  if (!crawler && !isPrerenderedArticleCandidate(pathname)) {
+    return null;
+  }
+
+  const folder = env.S3_CACHE_FOLDER || "cache/";
+  const key = pathname === "/" ? path_join(folder, "index.html") : path_join(folder, pathname);
+  const asset = await getStorageObject(env, key);
+  if (!asset) {
+    return null;
+  }
+
+  const newHeaders = new Headers(asset.headers);
+  newHeaders.set(
+    "Cache-Control",
+    crawler ? "private, no-store" : "public, max-age=60, stale-while-revalidate=300",
+  );
+
+  if (crawler) {
+    newHeaders.set("Vary", "User-Agent");
+  } else {
+    newHeaders.delete("Vary");
+  }
+
+  newHeaders.set("X-Rin-Prerender", "HIT");
+  const html = await asset.text();
+
+  return new Response(await normalizePrerenderedHtml(html, url, env), {
+    status: asset.status,
+    headers: newHeaders,
+  });
+}
+
 function isHtmlResponse(response: Response) {
   return HTML_CONTENT_TYPE_PATTERN.test(response.headers.get("Content-Type") || "");
 }
@@ -205,21 +267,9 @@ export async function handleFetch(request: Request, env: Env, ctx: ExecutionCont
 
   const userAgent = request.headers.get("User-Agent")?.toLowerCase() || "";
 
-  if (PRERENDER_USER_AGENTS.some((bot) => userAgent.includes(bot))) {
-    const folder = env.S3_CACHE_FOLDER || "cache/";
-    let key = pathname === "/" ? path_join(folder, "index.html") : path_join(folder, pathname);
-
-    const asset = await getStorageObject(env, key);
-    if (asset) {
-      const newHeaders = new Headers(asset.headers);
-      newHeaders.set("Cache-Control", "private, no-store");
-      newHeaders.set("Vary", "User-Agent");
-      const html = await asset.text();
-      return new Response(await normalizePrerenderedHtml(html, url, env), {
-        status: asset.status,
-        headers: newHeaders
-      });
-    }
+  const prerenderedHtml = await tryServePrerenderedHtml(request, env, userAgent);
+  if (prerenderedHtml) {
+    return prerenderedHtml;
   }
 
   if (isRootFeedRequest(pathname)) {

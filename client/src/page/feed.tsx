@@ -1,5 +1,5 @@
 import type { Feed } from "@rin/api";
-import { useContext, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useContext, useEffect, useRef, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import Popup from "reactjs-popup";
@@ -16,10 +16,15 @@ import { useSiteConfig } from "../hooks/useSiteConfig";
 import { timeago } from "../utils/timeago";
 import { Button } from "../components/button";
 import { Tips } from "../components/tips";
-import { AdjacentSection } from "../components/adjacent_feed.tsx";
 import { stripImageUrlMetadata } from "../utils/image-upload";
 import { articlePath } from "../utils/article-url";
 import { seoTextExcerpt } from "../utils/seo-text";
+
+const AdjacentSection = lazy(() =>
+  import("../components/adjacent_feed.tsx").then((module) => ({
+    default: module.AdjacentSection,
+  })),
+);
 
 function extractFirstMarkdownImageUrl(content: string) {
 
@@ -161,6 +166,25 @@ export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?
       });
     ref.current = `${id}_${routeLang || language}`;
   }, [id, language, routeLang, i18n]);
+
+  useEffect(() => {
+    if (!feed || !counterEnabled) return;
+
+    let active = true;
+    client.feed.stats(feed.id).then(({ data }) => {
+      if (!active || !data) return;
+
+      setFeed((current) =>
+        current?.id === feed.id
+          ? { ...current, pv: data.pv, uv: data.uv }
+          : current,
+      );
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [feed?.id, counterEnabled]);
   return (
     <Waiting for={feed || error}>
       {feed && (
@@ -362,7 +386,9 @@ export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?
                   </div>
                 </div>
               </article>
-              <AdjacentSection id={feed.id.toString()} setError={setError} />
+              <Suspense fallback={null}>
+                <AdjacentSection id={feed.id.toString()} setError={setError} />
+              </Suspense>
               {feed && <Comments id={`${feed.id}`} />}
               <div className="h-16" />
             </main>

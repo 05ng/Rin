@@ -10,6 +10,7 @@ import type {
   RequestOptions,
   Feed,
   FeedListResponse,
+  FeedStatsResponse,
   TimelineItem,
   CreateFeedRequest,
   UpdateFeedRequest,
@@ -352,6 +353,11 @@ class FeedAPI {
   async get(id: number | string, language?: ArticleLanguage | string): Promise<ApiResponse<Feed>> {
     const query = language ? `?language=${language}` : "";
     return this.http.get<Feed>(`/api/feed/${encodeURIComponent(String(id))}${query}`);
+  }
+
+  // GET /api/feed/stats/:id
+  async stats(id: number | string): Promise<ApiResponse<FeedStatsResponse>> {
+    return this.http.get<FeedStatsResponse>(`/api/feed/stats/${encodeURIComponent(String(id))}`);
   }
 
   // POST /api/feed

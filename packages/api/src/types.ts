@@ -62,6 +62,11 @@ export interface Feed {
   top?: number;
 }
 
+export interface FeedStatsResponse {
+  pv: number;
+  uv: number;
+}
+
 export interface FeedListResponse {
   size: number;
   data: Array<{
