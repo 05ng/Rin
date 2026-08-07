@@ -105,6 +105,7 @@ async function getPublicArticleContentCacheResponse(cacheKey: Request) {
         }
 
         const headers = new Headers(cached.headers);
+        headers.set("Cache-Control", "no-store");
         headers.set("X-Rin-Article-Cache", "HIT");
 
         return new Response(cached.body, {
@@ -716,9 +717,11 @@ export function FeedService(): Hono<{
         const response = c.json({ ...other, hashtags: hashtags_flatten, translations, pv: 0, uv: 0, vectorized });
 
         if (publicArticleCacheKey && !feed.draft) {
-            response.headers.set("Cache-Control", `public, max-age=${PUBLIC_ARTICLE_CONTENT_CACHE_TTL_SECONDS}`);
+            const cacheResponse = response.clone();
+            cacheResponse.headers.set("Cache-Control", `public, max-age=${PUBLIC_ARTICLE_CONTENT_CACHE_TTL_SECONDS}`);
+            schedulePublicArticleContentCachePut(c, publicArticleCacheKey, cacheResponse);
+            response.headers.set("Cache-Control", "no-store");
             response.headers.set("X-Rin-Article-Cache", "MISS");
-            schedulePublicArticleContentCachePut(c, publicArticleCacheKey, response);
         }
 
         return response;

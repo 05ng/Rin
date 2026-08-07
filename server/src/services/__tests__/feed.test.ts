@@ -296,6 +296,7 @@ describe('FeedService', () => {
                 const firstRes = await app.request('/cached-feed', { method: 'GET' }, env, executionCtx);
                 expect(firstRes.status).toBe(200);
                 expect(firstRes.headers.get('X-Rin-Article-Cache')).toBe('MISS');
+                expect(firstRes.headers.get('Cache-Control')).toBe('no-store');
                 expect(waitUntilPromises).toHaveLength(1);
                 await Promise.all(waitUntilPromises);
 
@@ -303,6 +304,7 @@ describe('FeedService', () => {
                 const secondRes = await app.request('/cached-feed', { method: 'GET' }, env, executionCtx);
                 expect(secondRes.status).toBe(200);
                 expect(secondRes.headers.get('X-Rin-Article-Cache')).toBe('HIT');
+                expect(secondRes.headers.get('Cache-Control')).toBe('no-store');
                 expect(waitUntilPromises).toHaveLength(0);
                 expect(await secondRes.json() as any).toMatchObject({
                     title: 'Cached Feed',
