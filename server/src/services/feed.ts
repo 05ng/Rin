@@ -2,7 +2,7 @@ import { and, asc, count, desc, eq, gt, inArray, like, lt, ne, or } from "drizzl
 import { SEARCH_VECTOR_SCORE_THRESHOLD_KEY, SERVER_CONFIG_DEFAULTS } from "@rin/config";
 import type { SQL } from "drizzle-orm";
 import { Hono } from "hono";
-import type { DB, Variables } from "../core/hono-types";
+import type { AppContext, DB, Variables } from "../core/hono-types";
 import { profileAsync } from "../core/server-timing";
 import { feedVectorIndexes, feeds, visits, visitStats } from "../db/schema";
 import { HyperLogLog } from "../utils/hyperloglog";
@@ -175,6 +175,65 @@ async function getFeedVectorized(db: DB, feedId: number) {
     });
 
     return state?.status === "completed" && state.chunkCount > 0;
+}
+
+type FeedVisitStats = {
+    pv: number;
+    hllData: string;
+} | null;
+
+function buildNextVisitStats(stats: FeedVisitStats, visitorKey: string) {
+    const hll = stats?.hllData ? new HyperLogLog(stats.hllData) : new HyperLogLog();
+    hll.add(visitorKey);
+
+    return {
+        hllData: hll.serialize(),
+        pv: (stats?.pv ?? 0) + 1,
+        uv: Math.round(hll.count()),
+    };
+}
+
+async function persistFeedVisit(db: DB, feedId: number, visitorKey: string, stats: FeedVisitStats) {
+    const nextStats = buildNextVisitStats(stats, visitorKey);
+
+    await Promise.all([
+        stats
+            ? db.update(visitStats)
+                .set({
+                    pv: nextStats.pv,
+                    hllData: nextStats.hllData,
+                    updatedAt: new Date(),
+                })
+                .where(eq(visitStats.feedId, feedId))
+            : db.insert(visitStats).values({
+                feedId,
+                pv: nextStats.pv,
+                hllData: nextStats.hllData,
+            }),
+        db.insert(visits).values({ feedId, ip: visitorKey }),
+    ]);
+}
+
+function getExecutionContext(c: AppContext) {
+    try {
+        return c.executionCtx;
+    } catch {
+        return undefined;
+    }
+}
+
+function scheduleFeedVisitPersistence(c: AppContext, db: DB, feedId: number, visitorKey: string, stats: FeedVisitStats) {
+    const task = persistFeedVisit(db, feedId, visitorKey, stats).catch((error) => {
+        console.error("Failed to persist feed visit", error);
+    });
+    const executionCtx = getExecutionContext(c);
+
+    if (executionCtx && typeof executionCtx.waitUntil === "function") {
+        executionCtx.waitUntil(task);
+        return;
+    }
+
+    void task;
 }
 
 async function initWPModules() {
@@ -495,9 +554,9 @@ export function FeedService(): Hono<{
         }
 
         const translationGroup = feed.translationGroup;
-        const translations = !translationGroup
-            ? []
-            : await profileAsync(c, 'feed_detail_translations', () => db.query.feeds.findMany({
+        const translationsPromise = !translationGroup
+            ? Promise.resolve([])
+            : profileAsync(c, 'feed_detail_translations', () => db.query.feeds.findMany({
                 where: and(
                     eq(feeds.translationGroup, translationGroup),
                     ne(feeds.id, feed.id),
@@ -507,55 +566,33 @@ export function FeedService(): Hono<{
                 columns: { id: true, alias: true, title: true, language: true },
                 orderBy: [asc(feeds.language)],
             }));
+        const vectorizedPromise = profileAsync(c, 'feed_detail_vector_status', () => getFeedVectorized(db, feed.id));
+        const enableVisitPromise = profileAsync(c, 'feed_detail_counter_flag', () => clientConfig.getOrDefault('counter.enabled', true));
+        const statsPromise = enableVisitPromise.then((enabled) => enabled
+            ? profileAsync(c, 'feed_detail_stats_lookup', () => db.query.visitStats.findFirst({
+                where: eq(visitStats.feedId, feed.id),
+                columns: { pv: true, hllData: true },
+            }).then((row) => row ?? null))
+            : null);
+
+        const [translations, vectorized, enableVisit, stats] = await Promise.all([
+            translationsPromise,
+            vectorizedPromise,
+            enableVisitPromise,
+            statsPromise,
+        ]);
 
         const { hashtags, ...other } = feed;
         const hashtags_flatten = hashtags.map((f: any) => f.hashtag);
-        const vectorized = await profileAsync(c, 'feed_detail_vector_status', () => getFeedVectorized(db, feed.id));
-
-        // update visits using HyperLogLog for efficient UV estimation
-        const enableVisit = await profileAsync(c, 'feed_detail_counter_flag', () => clientConfig.getOrDefault('counter.enabled', true));
         let pv = 0;
         let uv = 0;
 
         if (enableVisit) {
-            const ip = c.req.header('cf-connecting-ip') || c.req.header('x-real-ip') || "UNK";
-            const visitorKey = `${ip}`;
-
-            // Get or create visit stats for this feed
-            let stats = await profileAsync(c, 'feed_detail_stats_lookup', () => db.query.visitStats.findFirst({
-                where: eq(visitStats.feedId, feed.id)
-            }));
-
-            if (!stats) {
-                // Create new stats record
-                await profileAsync(c, 'feed_detail_stats_insert', () => db.insert(visitStats).values({
-                    feedId: feed.id,
-                    pv: 1,
-                    hllData: new HyperLogLog().serialize()
-                }));
-                pv = 1;
-                uv = 1;
-            } else {
-                // Update existing stats
-                const hll = new HyperLogLog(stats.hllData);
-                hll.add(visitorKey);
-                const newHllData = hll.serialize();
-                const newPv = stats.pv + 1;
-
-                await profileAsync(c, 'feed_detail_stats_update', () => db.update(visitStats)
-                    .set({
-                        pv: newPv,
-                        hllData: newHllData,
-                        updatedAt: new Date()
-                    })
-                    .where(eq(visitStats.feedId, feed.id)));
-
-                pv = newPv;
-                uv = Math.round(hll.count());
-            }
-
-            // Keep recording to visits table for backup/history
-            await profileAsync(c, 'feed_detail_visit_insert', () => db.insert(visits).values({ feedId: feed.id, ip: ip }));
+            const visitorKey = c.req.header('cf-connecting-ip') || c.req.header('x-real-ip') || "UNK";
+            const nextStats = buildNextVisitStats(stats, visitorKey);
+            pv = nextStats.pv;
+            uv = nextStats.uv;
+            scheduleFeedVisitPersistence(c, db, feed.id, visitorKey, stats);
         }
 
         return c.json({ ...other, hashtags: hashtags_flatten, translations, pv, uv, vectorized });

@@ -255,6 +255,71 @@ describe('FeedService', () => {
             expect(data.title).toBe('Test Feed');
         });
 
+        it('should schedule visit persistence without blocking the detail response', async () => {
+            const createRes = await app.request('/', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer mock_token_1',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    title: 'Counter Feed',
+                    content: 'Counter Content',
+                    listed: true,
+                    draft: false,
+                    tags: [],
+                }),
+            }, env);
+
+            expect(createRes.status).toBe(200);
+            const createData = await createRes.json() as any;
+            const waitUntilPromises: Promise<unknown>[] = [];
+            const executionCtx = {
+                waitUntil: (promise: Promise<unknown>) => {
+                    waitUntilPromises.push(Promise.resolve(promise));
+                },
+                passThroughOnException: () => {},
+            } as unknown as ExecutionContext;
+
+            const firstRes = await app.request(
+                `/${createData.insertedId}`,
+                { method: 'GET', headers: { 'cf-connecting-ip': '203.0.113.10' } },
+                env,
+                executionCtx,
+            );
+
+            expect(firstRes.status).toBe(200);
+            const firstData = await firstRes.json() as any;
+            expect(firstData.pv).toBe(1);
+            expect(firstData.uv).toBe(1);
+            expect(waitUntilPromises).toHaveLength(1);
+
+            await Promise.all(waitUntilPromises);
+            const firstStats = sqlite.prepare('SELECT pv, hll_data FROM visit_stats WHERE feed_id = ?').get(createData.insertedId) as any;
+            expect(firstStats.pv).toBe(1);
+            expect(firstStats.hll_data).not.toBe('');
+            expect((sqlite.prepare('SELECT COUNT(*) as count FROM visits WHERE feed_id = ?').get(createData.insertedId) as any).count).toBe(1);
+
+            waitUntilPromises.length = 0;
+            const secondRes = await app.request(
+                `/${createData.insertedId}`,
+                { method: 'GET', headers: { 'cf-connecting-ip': '203.0.113.10' } },
+                env,
+                executionCtx,
+            );
+
+            expect(secondRes.status).toBe(200);
+            const secondData = await secondRes.json() as any;
+            expect(secondData.pv).toBe(2);
+            expect(secondData.uv).toBe(1);
+            expect(waitUntilPromises).toHaveLength(1);
+
+            await Promise.all(waitUntilPromises);
+            const secondStats = sqlite.prepare('SELECT pv FROM visit_stats WHERE feed_id = ?').get(createData.insertedId) as any;
+            expect(secondStats.pv).toBe(2);
+            expect((sqlite.prepare('SELECT COUNT(*) as count FROM visits WHERE feed_id = ?').get(createData.insertedId) as any).count).toBe(2);
+        });
+
         it('should prefer a numeric feed id over another feed numeric alias', async () => {
             const firstRes = await app.request('/', {
                 method: 'POST',
