@@ -1,46 +1,50 @@
 import type { ReactNode } from "react";
-import { useContext } from "react";
+import { lazy, Suspense, useContext, useState } from "react";
+import ReactModal from "react-modal";
 import type { DefaultParams, PathPattern } from "wouter";
 import { Route, Switch } from "wouter";
 import { AdminLayout } from "../components/admin-layout";
 import Footer from "../components/footer";
 import { Header } from "../components/header";
+import { Waiting } from "../components/loading";
 import { Padding } from "../components/padding";
 import { getHeaderLayoutDefinition } from "../components/site-header/layout-registry";
 import { Tips, TipsPage } from "../components/tips";
 import useTableOfContents from "../hooks/useTableOfContents";
 import { useSiteConfig } from "../hooks/useSiteConfig";
-import { CallbackPage } from "../page/callback";
-import { CloudflareUsagePage } from "../page/cloudflare-usage";
-import { CompatTasksPage } from "../page/compat-tasks";
 import { ErrorPage } from "../page/error";
-import { FeedPage, TOCHeader } from "../page/feed";
-import { FeedsPage } from "../page/feeds";
-import { FriendsPage } from "../page/friends";
-import { GamePage, WaterFallGamePage } from "../page/game";
-import { PenaltyKickGamePage } from "../page/penalty-kick";
-import { RestaurantGamePage } from "../page/restaurant-game";
-import { MathPracticeGamePage } from "../page/math-practice";
-import { MinecraftGamePage } from "../page/minecraft";
-import { HealthPage } from "../page/health";
-import { IsbnBarcodePage } from "../page/isbn-barcode";
-import { HashtagPage } from "../page/hashtag";
-import { HashtagsPage } from "../page/hashtags";
-import { LoginPage } from "../page/login";
-import { MomentsPage } from "../page/moments";
-import { MyIpPage } from "../page/my-ip";
-import { OcbcAdbCalculatorPage } from "../page/ocbc-adb-calculator";
-import { ProfilePage } from "../page/profile";
-import { QrCodePage } from "../page/qr-code";
-import { QueueStatusPage } from "../page/queue-status";
-import { SearchPage } from "../page/search";
-import { Settings } from "../page/settings";
-import { TimelinePage } from "../page/timeline";
-import { ToolsPage } from "../page/tools";
-import { WritingPage } from "../page/writing";
 import { ProfileContext } from "../state/profile";
 import { tryInt } from "../utils/int";
 import { useTranslation } from "react-i18next";
+
+const CallbackPage = lazy(() => import("../page/callback").then((module) => ({ default: module.CallbackPage })));
+const CloudflareUsagePage = lazy(() => import("../page/cloudflare-usage").then((module) => ({ default: module.CloudflareUsagePage })));
+const CompatTasksPage = lazy(() => import("../page/compat-tasks").then((module) => ({ default: module.CompatTasksPage })));
+const FeedPage = lazy(() => import("../page/feed").then((module) => ({ default: module.FeedPage })));
+const FeedsPage = lazy(() => import("../page/feeds").then((module) => ({ default: module.FeedsPage })));
+const FriendsPage = lazy(() => import("../page/friends").then((module) => ({ default: module.FriendsPage })));
+const GamePage = lazy(() => import("../page/game").then((module) => ({ default: module.GamePage })));
+const HashtagPage = lazy(() => import("../page/hashtag").then((module) => ({ default: module.HashtagPage })));
+const HashtagsPage = lazy(() => import("../page/hashtags").then((module) => ({ default: module.HashtagsPage })));
+const HealthPage = lazy(() => import("../page/health").then((module) => ({ default: module.HealthPage })));
+const IsbnBarcodePage = lazy(() => import("../page/isbn-barcode").then((module) => ({ default: module.IsbnBarcodePage })));
+const LoginPage = lazy(() => import("../page/login").then((module) => ({ default: module.LoginPage })));
+const MathPracticeGamePage = lazy(() => import("../page/math-practice").then((module) => ({ default: module.MathPracticeGamePage })));
+const MinecraftGamePage = lazy(() => import("../page/minecraft").then((module) => ({ default: module.MinecraftGamePage })));
+const MomentsPage = lazy(() => import("../page/moments").then((module) => ({ default: module.MomentsPage })));
+const MyIpPage = lazy(() => import("../page/my-ip").then((module) => ({ default: module.MyIpPage })));
+const OcbcAdbCalculatorPage = lazy(() => import("../page/ocbc-adb-calculator").then((module) => ({ default: module.OcbcAdbCalculatorPage })));
+const PenaltyKickGamePage = lazy(() => import("../page/penalty-kick").then((module) => ({ default: module.PenaltyKickGamePage })));
+const ProfilePage = lazy(() => import("../page/profile").then((module) => ({ default: module.ProfilePage })));
+const QrCodePage = lazy(() => import("../page/qr-code").then((module) => ({ default: module.QrCodePage })));
+const QueueStatusPage = lazy(() => import("../page/queue-status").then((module) => ({ default: module.QueueStatusPage })));
+const RestaurantGamePage = lazy(() => import("../page/restaurant-game").then((module) => ({ default: module.RestaurantGamePage })));
+const SearchPage = lazy(() => import("../page/search").then((module) => ({ default: module.SearchPage })));
+const Settings = lazy(() => import("../page/settings").then((module) => ({ default: module.Settings })));
+const TimelinePage = lazy(() => import("../page/timeline").then((module) => ({ default: module.TimelinePage })));
+const ToolsPage = lazy(() => import("../page/tools").then((module) => ({ default: module.ToolsPage })));
+const WaterFallGamePage = lazy(() => import("../page/game").then((module) => ({ default: module.WaterFallGamePage })));
+const WritingPage = lazy(() => import("../page/writing").then((module) => ({ default: module.WritingPage })));
 
 export function AppRoutes() {
   const { t } = useTranslation();
@@ -219,6 +223,51 @@ export function AppRoutes() {
   );
 }
 
+function TOCHeader({ TOC }: { TOC: () => JSX.Element }) {
+  const [isOpened, setIsOpened] = useState(false);
+
+  return (
+    <div className="shrink-0 lg:hidden">
+      <button
+        onClick={() => setIsOpened(true)}
+        className="w-10 h-10 rounded-full flex flex-row items-center justify-center"
+      >
+        <i className="ri-menu-2-line text-neutral-500 transition-colors hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100 ri-lg md:ri-sm md:t-secondary"></i>
+      </button>
+      <ReactModal
+        isOpen={isOpened}
+        style={{
+          content: {
+            top: "50%",
+            left: "50%",
+            right: "auto",
+            bottom: "auto",
+            marginRight: "-50%",
+            transform: "translate(-50%, -50%)",
+            padding: "0",
+            border: "none",
+            borderRadius: "16px",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "center",
+            background: "none",
+          },
+          overlay: {
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            zIndex: 1000,
+          },
+        }}
+        onRequestClose={() => setIsOpened(false)}
+      >
+        <div className="w-[80vw] sm:w-[60vw] lg:w-[40vw] overflow-clip relative t-primary">
+          <TOC />
+        </div>
+      </ReactModal>
+    </div>
+  );
+}
+
 function AppRoute({
   path,
   children,
@@ -247,7 +296,11 @@ function AppRoute({
 
         return layoutDefinition.renderRouteShell({
           header: <Header>{headerComponent}</Header>,
-          content: <Padding className={paddingClassName}>{resolvedContent}</Padding>,
+          content: (
+            <Padding className={paddingClassName}>
+              <Suspense fallback={<Waiting />}>{resolvedContent}</Suspense>
+            </Padding>
+          ),
           footer: <Footer />,
           paddingClassName,
         });
@@ -278,7 +331,9 @@ function AdminRoute({
     <Route path={path}>
       {(params) => (
         <AdminLayout title={title} description={description}>
-          {typeof content === "function" ? content(params) : content}
+          <Suspense fallback={<Waiting />}>
+            {typeof content === "function" ? content(params) : content}
+          </Suspense>
         </AdminLayout>
       )}
     </Route>
@@ -295,7 +350,7 @@ function TocRoute({
   const { TOC, cleanup } = useTableOfContents(".toc-content");
 
   return (
-    <AppRoute path={path} headerComponent={TOCHeader({ TOC })} paddingClassName="mx-4">
+    <AppRoute path={path} headerComponent={<TOCHeader TOC={TOC} />} paddingClassName="mx-4">
       {(params) => children(params, TOC, cleanup)}
     </AppRoute>
   );

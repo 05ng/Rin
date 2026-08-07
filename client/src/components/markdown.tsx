@@ -1,28 +1,22 @@
-import "katex/dist/katex.min.css";
-import React, { cloneElement, isValidElement, useEffect, useMemo, useRef } from "react";
-import mermaid from "mermaid";
+import React, { cloneElement, isValidElement, lazy, Suspense, useEffect, useMemo, useRef } from "react";
 import ReactMarkdown from "react-markdown";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import {
-  base16AteliersulphurpoolLight,
-  vscDarkPlus,
-} from "react-syntax-highlighter/dist/esm/styles/prism";
-import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
 import gfm from "remark-gfm";
 import { remarkAlert } from "remark-github-blockquote-alert";
-import remarkMath from "remark-math";
 import remarkBreaks from "remark-breaks";
-import Lightbox, { SlideImage } from "yet-another-react-lightbox";
-import Counter from "yet-another-react-lightbox/plugins/counter";
-import Download from "yet-another-react-lightbox/plugins/download";
-import Zoom from "yet-another-react-lightbox/plugins/zoom";
-import "yet-another-react-lightbox/styles.css";
+import type { Pluggable } from "unified";
+import type { SlideImage } from "yet-another-react-lightbox";
 import { drawBlurhashToCanvas } from "../utils/blurhash";
 import { useColorMode } from "../utils/darkModeUtils";
 import { parseImageUrlMetadata } from "../utils/image-upload";
 import { useImageLoadState } from "../utils/use-image-load-state";
 
+const MarkdownCodeBlock = lazy(() => import("./markdown-code-block").then((module) => ({ default: module.MarkdownCodeBlock })));
+const MarkdownLightbox = lazy(() => import("./markdown-lightbox").then((module) => ({ default: module.MarkdownLightbox })));
+
+function contentLikelyHasMath(content: string) {
+  return /(^|\n)\s*\$\$[\s\S]*?\$\$|(?:^|[^\\$])\$[^$\n]+?\$|```math\b/.test(content);
+}
 
 function escapeUnsafeScriptTags(content: string) {
   return content.replace(/<\/?script\b/gi, (match) => match.replace("<", "&lt;"));
@@ -206,10 +200,41 @@ export function Markdown({ content }: { content: string }) {
     () => escapeUnsafeScriptTags(normalizeStandaloneMermaidBlocks(content)),
     [content]
   );
+  const hasMath = useMemo(() => contentLikelyHasMath(safeContent), [safeContent]);
+  const [mathPlugins, setMathPlugins] = React.useState<{
+    rehypeKatex: Pluggable;
+    remarkMath: Pluggable;
+  } | null>(null);
 
   useEffect(() => {
     slides.current = undefined;
   }, [content]);
+
+  useEffect(() => {
+    if (!hasMath) {
+      setMathPlugins(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    void Promise.all([
+      import("remark-math"),
+      import("rehype-katex"),
+      import("katex/dist/katex.min.css"),
+    ]).then(([remarkMathModule, rehypeKatexModule]) => {
+      if (!cancelled) {
+        setMathPlugins({
+          rehypeKatex: rehypeKatexModule.default as Pluggable,
+          remarkMath: remarkMathModule.default as Pluggable,
+        });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasMath]);
 
   useEffect(() => {
     const root = markdownRef.current;
@@ -221,6 +246,12 @@ export function Markdown({ content }: { content: string }) {
       try {
         const defaultNodes = root.querySelectorAll<HTMLElement>("pre.mermaid_default");
         const darkNodes = root.querySelectorAll<HTMLElement>("pre.mermaid_dark");
+
+        if (defaultNodes.length === 0 && darkNodes.length === 0) {
+          return;
+        }
+
+        const { default: mermaid } = await import("mermaid");
 
         if (defaultNodes.length > 0) {
           mermaid.initialize({
@@ -247,12 +278,25 @@ export function Markdown({ content }: { content: string }) {
     void render();
   }, [safeContent, colorMode]);
 
+  const remarkPlugins = useMemo(
+    () => hasMath && mathPlugins
+      ? [gfm, mathPlugins.remarkMath, remarkAlert, remarkBreaks]
+      : [gfm, remarkAlert, remarkBreaks],
+    [hasMath, mathPlugins]
+  );
+  const rehypePlugins = useMemo(
+    () => hasMath && mathPlugins
+      ? [mathPlugins.rehypeKatex, rehypeRaw]
+      : [rehypeRaw],
+    [hasMath, mathPlugins]
+  );
+
   const Content = useMemo(() => (
     <ReactMarkdown
       className="toc-content dark:text-neutral-300"
-      remarkPlugins={[gfm, remarkMath, remarkAlert, remarkBreaks]}
+      remarkPlugins={remarkPlugins}
       children={safeContent}
-      rehypePlugins={[rehypeKatex, rehypeRaw]}
+      rehypePlugins={rehypePlugins}
       components={{
         img({ node, src, ...props }) {
           const offset = node!.position!.start.offset!;
@@ -296,7 +340,6 @@ export function Markdown({ content }: { content: string }) {
           }
         },
         code(props) {
-          const [copied, setCopied] = React.useState(false);
           const { children, className, node, ...rest } = props;
           const match = /language-(\w+)/.exec(className || "");
 
@@ -331,31 +374,19 @@ export function Markdown({ content }: { content: string }) {
             }
 
             return (
-              <div className="relative group">
-                <SyntaxHighlighter
-                  PreTag="div"
-                  className="rounded"
+              <Suspense
+                fallback={
+                  <pre className="overflow-x-auto rounded bg-[#f5f7f9] p-4 text-neutral-800 dark:bg-neutral-900 dark:text-neutral-200">
+                    <code style={codeBlockStyle}>{code}</code>
+                  </pre>
+                }
+              >
+                <MarkdownCodeBlock
+                  code={code}
+                  colorMode={colorMode}
                   language={language}
-                  style={
-                    colorMode === "dark"
-                      ? vscDarkPlus
-                      : base16AteliersulphurpoolLight
-                  }
-                  wrapLongLines={true}
-                  codeTagProps={{ style: codeBlockStyle }}
-                >
-                  {code}
-                </SyntaxHighlighter>
-                <button className="absolute top-1 right-1 px-2 py-1 bg-w rounded-md text-sm bg-hover select-none invisible group-hover:visible"
-                  onClick={() => {
-                    navigator.clipboard.writeText(code);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
-                  }}
-                >
-                  {copied ? "Copied!" : "Copy"}
-                </button>
-              </div>
+                />
+              </Suspense>
             );
           } else {
             return (
@@ -563,7 +594,7 @@ export function Markdown({ content }: { content: string }) {
           return <div {...props}>{children}</div>;
         },
       }}
-    />), [safeContent, colorMode])
+    />), [safeContent, colorMode, rehypePlugins, remarkPlugins])
 
 
 
@@ -600,13 +631,15 @@ export function Markdown({ content }: { content: string }) {
       <div ref={markdownRef}>
         {Content}
       </div>
-      <Lightbox
-        plugins={[Download, Zoom, Counter]}
-        index={index}
-        slides={slides.current}
-        open={index >= 0}
-        close={() => setIndex(-1)}
-      />
+      {index >= 0 ? (
+        <Suspense fallback={null}>
+          <MarkdownLightbox
+            close={() => setIndex(-1)}
+            index={index}
+            slides={slides.current}
+          />
+        </Suspense>
+      ) : null}
     </>
   );
 }
