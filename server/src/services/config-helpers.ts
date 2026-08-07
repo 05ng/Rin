@@ -229,12 +229,14 @@ export async function buildClientConfigResponse(
   env: Env,
   profile?: ConfigProfiler,
 ) {
-  const clientConfigData = profile
-    ? await profile("client_config_defaults", () => getClientConfigWithDefaults(clientConfig, env, profile))
-    : await getClientConfigWithDefaults(clientConfig, env);
-  const aiEnabled = profile
-    ? await profile("client_ai_enabled", () => getFrontendAIEnabled(serverConfig))
-    : await getFrontendAIEnabled(serverConfig);
+  const [clientConfigData, aiEnabled] = await Promise.all([
+    profile
+      ? profile("client_config_defaults", () => getClientConfigWithDefaults(clientConfig, env, profile))
+      : getClientConfigWithDefaults(clientConfig, env),
+    profile
+      ? profile("client_ai_enabled", () => getFrontendAIEnabled(serverConfig))
+      : getFrontendAIEnabled(serverConfig),
+  ]);
 
   return {
     ...clientConfigData,

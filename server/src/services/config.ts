@@ -24,6 +24,89 @@ import {
     runCompatAISummaryBackfill,
 } from "./config-compat-tasks";
 
+const CLIENT_BOOTSTRAP_CACHE_TTL_SECONDS = 60;
+const CLIENT_BOOTSTRAP_CACHE_PATH = "/__rin_client_bootstrap";
+
+function getDefaultContentCache() {
+    const globalCaches = (globalThis as typeof globalThis & { caches?: { default?: Cache } }).caches;
+    return globalCaches?.default;
+}
+
+function getExecutionContext(c: AppContext) {
+    try {
+        return c.executionCtx;
+    } catch {
+        return undefined;
+    }
+}
+
+function getClientBootstrapCacheKey(c: AppContext) {
+    const url = new URL(c.req.url);
+    url.pathname = CLIENT_BOOTSTRAP_CACHE_PATH;
+    url.search = "";
+
+    return new Request(url.toString(), { method: "GET" });
+}
+
+async function getClientBootstrapCacheResponse(cacheKey: Request) {
+    const contentCache = getDefaultContentCache();
+    if (!contentCache) {
+        return null;
+    }
+
+    try {
+        const cached = await contentCache.match(cacheKey);
+        if (!cached) {
+            return null;
+        }
+
+        const headers = new Headers(cached.headers);
+        headers.set("Cache-Control", "public, max-age=0, must-revalidate");
+        headers.set("X-Rin-Config-Bootstrap-Cache", "HIT");
+
+        return new Response(cached.body, {
+            status: cached.status,
+            statusText: cached.statusText,
+            headers,
+        });
+    } catch (error) {
+        console.error("Failed to read client bootstrap cache", error);
+        return null;
+    }
+}
+
+function scheduleClientBootstrapCachePut(c: AppContext, cacheKey: Request, response: Response) {
+    const contentCache = getDefaultContentCache();
+    if (!contentCache) {
+        return;
+    }
+
+    const task = contentCache.put(cacheKey, response.clone()).catch((error: unknown) => {
+        console.error("Failed to write client bootstrap cache", error);
+    });
+    const executionCtx = getExecutionContext(c);
+
+    if (executionCtx && typeof executionCtx.waitUntil === "function") {
+        executionCtx.waitUntil(task);
+        return;
+    }
+
+    void task;
+}
+
+async function clearClientBootstrapCache(c: AppContext) {
+    const contentCache = getDefaultContentCache();
+    if (!contentCache) {
+        return;
+    }
+
+    try {
+        await contentCache.delete(getClientBootstrapCacheKey(c));
+    } catch (error) {
+        console.error("Failed to clear client bootstrap cache", error);
+    }
+}
+
 export function ConfigService(): Hono {
     const app = new Hono();
 
@@ -308,16 +391,27 @@ export function ConfigService(): Hono {
         const serverConfig = c.get('serverConfig');
         const env = c.get('env');
         const profile = <T>(name: string, task: () => Promise<T>) => profileAsync(c, name, task);
+        const cacheKey = getClientBootstrapCacheKey(c);
+        const cachedResponse = await profileAsync(c, 'bootstrap_edge_cache', () => getClientBootstrapCacheResponse(cacheKey));
+        if (cachedResponse) {
+            return cachedResponse;
+        }
+
         const config = await profileAsync(c, 'bootstrap_client_config', () => buildClientConfigResponse(clientConfig, serverConfig, env, profile));
         const script = await profileAsync(c, 'bootstrap_script', () => Promise.resolve(serializeBootstrapScript(config)));
-
-        return new Response(script, {
+        const response = new Response(script, {
             status: 200,
             headers: {
                 'content-type': 'application/javascript; charset=utf-8',
                 'cache-control': 'public, max-age=0, must-revalidate',
+                'x-rin-config-bootstrap-cache': 'MISS',
             },
         });
+        const cacheResponse = response.clone();
+        cacheResponse.headers.set('cache-control', `public, max-age=${CLIENT_BOOTSTRAP_CACHE_TTL_SECONDS}`);
+        scheduleClientBootstrapCachePut(c, cacheKey, cacheResponse);
+
+        return response;
     });
 
     // GET /config/:type
@@ -375,6 +469,7 @@ export function ConfigService(): Hono {
             await setAIConfig(serverConfig, aiConfigUpdates);
         }
 
+        await clearClientBootstrapCache(c);
         return c.json(await buildCombinedConfigResponse(clientConfig, serverConfig, env));
     });
 
@@ -402,7 +497,8 @@ export function ConfigService(): Hono {
         if (Object.keys(aiConfigUpdates).length > 0) {
             await setAIConfig(serverConfig, aiConfigUpdates);
         }
-        
+
+        await clearClientBootstrapCache(c);
         return c.text('OK');
     });
 

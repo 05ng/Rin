@@ -52,6 +52,67 @@ describe("ConfigService", () => {
             expect(res.headers.get("Server-Timing")).toContain("bootstrap_script");
         });
 
+        it("should cache bootstrap script in the edge cache", async () => {
+            const cacheStore = new Map<string, Response>();
+            const originalCaches = (globalThis as any).caches;
+            const waitUntilPromises: Promise<unknown>[] = [];
+            const executionCtx = {
+                waitUntil: (promise: Promise<unknown>) => {
+                    waitUntilPromises.push(Promise.resolve(promise));
+                },
+                passThroughOnException: () => {},
+            } as unknown as ExecutionContext;
+
+            (globalThis as any).caches = {
+                default: {
+                    match: async (request: Request) => cacheStore.get(request.url)?.clone(),
+                    put: async (request: Request, response: Response) => {
+                        cacheStore.set(request.url, response.clone());
+                    },
+                    delete: async (request: Request) => cacheStore.delete(request.url),
+                },
+            };
+
+            try {
+                const firstRes = await app.request("/client/bootstrap.js", { method: "GET" }, env, executionCtx);
+                expect(firstRes.status).toBe(200);
+                expect(firstRes.headers.get("X-Rin-Config-Bootstrap-Cache")).toBe("MISS");
+                expect(firstRes.headers.get("Cache-Control")).toBe("public, max-age=0, must-revalidate");
+                expect(waitUntilPromises).toHaveLength(1);
+                await Promise.all(waitUntilPromises);
+
+                waitUntilPromises.length = 0;
+                const secondRes = await app.request("/client/bootstrap.js?ignored=true", { method: "GET" }, env, executionCtx);
+                expect(secondRes.status).toBe(200);
+                expect(secondRes.headers.get("X-Rin-Config-Bootstrap-Cache")).toBe("HIT");
+                expect(secondRes.headers.get("Cache-Control")).toBe("public, max-age=0, must-revalidate");
+                expect(waitUntilPromises).toHaveLength(0);
+
+                const updateRes = await app.request("/client", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": "Bearer mock_token_1",
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ "site.name": "Fresh Bootstrap Site" }),
+                }, env, executionCtx);
+                expect(updateRes.status).toBe(200);
+                expect(cacheStore.size).toBe(0);
+
+                const thirdRes = await app.request("/client/bootstrap.js", { method: "GET" }, env, executionCtx);
+                expect(thirdRes.status).toBe(200);
+                expect(thirdRes.headers.get("X-Rin-Config-Bootstrap-Cache")).toBe("MISS");
+                const thirdBody = await thirdRes.text();
+                expect(thirdBody).toContain("Fresh Bootstrap Site");
+            } finally {
+                if (originalCaches === undefined) {
+                    delete (globalThis as any).caches;
+                } else {
+                    (globalThis as any).caches = originalCaches;
+                }
+            }
+        });
+
         it("should get client config without authentication", async () => {
             const res = await app.request("/client", {
                 method: "GET",
