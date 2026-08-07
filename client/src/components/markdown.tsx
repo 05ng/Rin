@@ -244,32 +244,20 @@ export function Markdown({ content }: { content: string }) {
 
     const render = async () => {
       try {
-        const defaultNodes = root.querySelectorAll<HTMLElement>("pre.mermaid_default");
-        const darkNodes = root.querySelectorAll<HTMLElement>("pre.mermaid_dark");
+        const mermaidNodes = root.querySelectorAll<HTMLElement>("pre.mermaid");
 
-        if (defaultNodes.length === 0 && darkNodes.length === 0) {
+        if (mermaidNodes.length === 0) {
           return;
         }
 
         const { default: mermaid } = await import("mermaid");
 
-        if (defaultNodes.length > 0) {
-          mermaid.initialize({
-            startOnLoad: false,
-            theme: "default",
-            themeCSS: transparentMermaidElementThemeCSS,
-          });
-          await mermaid.run({ suppressErrors: true, nodes: defaultNodes });
-        }
-
-        if (darkNodes.length > 0) {
-          mermaid.initialize({
-            startOnLoad: false,
-            theme: "dark",
-            themeCSS: transparentMermaidElementThemeCSS,
-          });
-          await mermaid.run({ suppressErrors: true, nodes: darkNodes });
-        }
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: colorMode === "dark" ? "dark" : "default",
+          themeCSS: transparentMermaidElementThemeCSS,
+        });
+        await mermaid.run({ suppressErrors: true, nodes: mermaidNodes });
       } catch (error) {
         console.error("Failed to render Mermaid diagram", error);
       }
@@ -367,8 +355,7 @@ export function Markdown({ content }: { content: string }) {
             if (language === "mermaid") {
               return (
                 <div className="my-4 overflow-x-auto rounded-xl bg-white p-4 dark:bg-neutral-950">
-                  <pre className="mermaid_default dark:hidden">{code}</pre>
-                  <pre className="mermaid_dark hidden dark:block">{code}</pre>
+                  <pre key={`mermaid-${colorMode}-${code}`} className="mermaid">{code}</pre>
                 </div>
               );
             }

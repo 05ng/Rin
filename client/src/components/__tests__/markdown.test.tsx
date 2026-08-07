@@ -50,27 +50,20 @@ describe("Markdown Mermaid rendering", () => {
     const { container } = render(<Markdown content={`\`\`\`mermaid
 ${mermaidDiagram}
 \`\`\``} />);
-    const mermaidBlocks = container.querySelectorAll("pre.mermaid_default, pre.mermaid_dark");
+    const mermaidBlocks = container.querySelectorAll("pre.mermaid");
 
-    expect(mermaidBlocks).toHaveLength(2);
+    expect(mermaidBlocks).toHaveLength(1);
     expect(mermaidBlocks[0]).toHaveTextContent("graph TD");
     expect(mermaidBlocks[0]).toHaveTextContent("Central Server<br/>New York");
     expect(within(mermaidBlocks[0] as HTMLElement).queryByText("New York")).toBeNull();
 
     await waitFor(() => {
-      expect(mermaidMock.run).toHaveBeenCalledTimes(2);
+      expect(mermaidMock.run).toHaveBeenCalledTimes(1);
     });
     expect(mermaidMock.initialize).toHaveBeenCalledWith(
       expect.objectContaining({
         startOnLoad: false,
         theme: "default",
-        themeCSS: expect.stringContaining("fill: transparent !important"),
-      })
-    );
-    expect(mermaidMock.initialize).toHaveBeenCalledWith(
-      expect.objectContaining({
-        startOnLoad: false,
-        theme: "dark",
         themeCSS: expect.stringContaining("fill: transparent !important"),
       })
     );
@@ -86,17 +79,16 @@ The Challenges of the Traditional Model
 ${edgeNetworkDiagram}
 
 After the chart.`} />);
-    const mermaidBlocks = container.querySelectorAll("pre.mermaid_default, pre.mermaid_dark");
+    const mermaidBlocks = container.querySelectorAll("pre.mermaid");
 
-    expect(mermaidBlocks).toHaveLength(4);
+    expect(mermaidBlocks).toHaveLength(2);
     expect(mermaidBlocks[0]).toHaveTextContent("Central Server<br/>New York");
-    expect(mermaidBlocks[1]).toHaveTextContent("Central Server<br/>New York");
-    expect(mermaidBlocks[2]).toHaveTextContent("Edge Node<br/>Tokyo");
-    expect(mermaidBlocks[2]).toHaveTextContent("|< 20ms|");
-    expect(mermaidBlocks[2]).not.toHaveTextContent("The Challenges of the Traditional Model");
+    expect(mermaidBlocks[1]).toHaveTextContent("Edge Node<br/>Tokyo");
+    expect(mermaidBlocks[1]).toHaveTextContent("|< 20ms|");
+    expect(mermaidBlocks[1]).not.toHaveTextContent("The Challenges of the Traditional Model");
 
     await waitFor(() => {
-      expect(mermaidMock.run).toHaveBeenCalledTimes(2);
+      expect(mermaidMock.run).toHaveBeenCalledTimes(1);
     });
     expect(container).toHaveTextContent("Before the chart.");
     expect(container).toHaveTextContent("The Challenges of the Traditional Model");
@@ -109,7 +101,7 @@ ${mermaidDiagram}
 \`\`\``} />);
 
     await waitFor(() => {
-      expect(mermaidMock.run).toHaveBeenCalledTimes(2);
+      expect(mermaidMock.run).toHaveBeenCalledTimes(1);
     });
 
     act(() => {
@@ -118,7 +110,7 @@ ${mermaidDiagram}
     });
 
     await waitFor(() => {
-      expect(mermaidMock.run).toHaveBeenCalledTimes(4);
+      expect(mermaidMock.run).toHaveBeenCalledTimes(2);
     });
     expect(mermaidMock.initialize).toHaveBeenLastCalledWith(
       expect.objectContaining({
