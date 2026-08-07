@@ -47,6 +47,8 @@ function parseArticleLanguage(value: unknown): ArticleLanguage | null {
 const DEFAULT_VECTOR_SCORE_THRESHOLD = Number(SERVER_CONFIG_DEFAULTS.get(SEARCH_VECTOR_SCORE_THRESHOLD_KEY) ?? 0.72);
 const PUBLIC_ARTICLE_CONTENT_CACHE_TTL_SECONDS = 60;
 const PUBLIC_ARTICLE_CONTENT_CACHE_PATH = "/__rin_public_article_content";
+const PUBLIC_FEED_LIST_CACHE_TTL_SECONDS = 60;
+const PUBLIC_FEED_LIST_CACHE_PATH = "/__rin_public_feed_list";
 
 function parseVectorScoreThreshold(value: unknown) {
     const parsed = typeof value === "number"
@@ -92,6 +94,24 @@ function getPublicArticleContentCacheKey(c: AppContext, id: string, language: Ar
     return new Request(url.toString(), { method: "GET" });
 }
 
+function canUsePublicFeedListCache(admin: boolean, uid: number | null | undefined, type: string | undefined) {
+    return !admin && !uid && (type === undefined || type === "" || type === "normal");
+}
+
+function getPublicFeedListCacheKey(
+    c: AppContext,
+    options: { page: number; limit: number; language: ArticleLanguage | undefined },
+) {
+    const url = new URL(c.req.url);
+    url.pathname = PUBLIC_FEED_LIST_CACHE_PATH;
+    url.search = "";
+    url.searchParams.set("page", String(options.page));
+    url.searchParams.set("limit", String(options.limit));
+    url.searchParams.set("language", options.language || "all");
+
+    return new Request(url.toString(), { method: "GET" });
+}
+
 async function getPublicArticleContentCacheResponse(cacheKey: Request) {
     const contentCache = getDefaultContentCache();
     if (!contentCache) {
@@ -119,6 +139,33 @@ async function getPublicArticleContentCacheResponse(cacheKey: Request) {
     }
 }
 
+async function getPublicFeedListCacheResponse(cacheKey: Request) {
+    const contentCache = getDefaultContentCache();
+    if (!contentCache) {
+        return null;
+    }
+
+    try {
+        const cached = await contentCache.match(cacheKey);
+        if (!cached) {
+            return null;
+        }
+
+        const headers = new Headers(cached.headers);
+        headers.set("Cache-Control", "no-store");
+        headers.set("X-Rin-Feed-List-Cache", "HIT");
+
+        return new Response(cached.body, {
+            status: cached.status,
+            statusText: cached.statusText,
+            headers,
+        });
+    } catch (error) {
+        console.error("Failed to read public feed list cache", error);
+        return null;
+    }
+}
+
 function schedulePublicArticleContentCachePut(c: AppContext, cacheKey: Request, response: Response) {
     const contentCache = getDefaultContentCache();
     if (!contentCache) {
@@ -136,6 +183,39 @@ function schedulePublicArticleContentCachePut(c: AppContext, cacheKey: Request, 
     }
 
     void task;
+}
+
+function schedulePublicFeedListCachePut(c: AppContext, cacheKey: Request, response: Response) {
+    const contentCache = getDefaultContentCache();
+    if (!contentCache) {
+        return;
+    }
+
+    const task = contentCache.put(cacheKey, response.clone()).catch((error: unknown) => {
+        console.error("Failed to write public feed list cache", error);
+    });
+    const executionCtx = getExecutionContext(c);
+
+    if (executionCtx && typeof executionCtx.waitUntil === "function") {
+        executionCtx.waitUntil(task);
+        return;
+    }
+
+    void task;
+}
+
+function cachePublicFeedListResponse(c: AppContext, cacheKey: Request | null, response: Response) {
+    if (!cacheKey) {
+        return response;
+    }
+
+    const cacheResponse = response.clone();
+    cacheResponse.headers.set("Cache-Control", `public, max-age=${PUBLIC_FEED_LIST_CACHE_TTL_SECONDS}`);
+    schedulePublicFeedListCachePut(c, cacheKey, cacheResponse);
+    response.headers.set("Cache-Control", "no-store");
+    response.headers.set("X-Rin-Feed-List-Cache", "MISS");
+
+    return response;
 }
 
 function queueArticleVectorizeWorkflow(c: any, feedId: number, options: { isDelete?: boolean; chunkCount?: number } = {}) {
@@ -335,11 +415,12 @@ export function FeedService(): Hono<{
         const db = c.get('db');
         const cache = c.get('cache');
         const admin = c.get('admin');
+        const uid = c.get('uid');
         const page = c.req.query('page');
         const limit = c.req.query('limit');
         const type = c.req.query('type');
         const languageQuery = c.req.query('language');
-        const language = languageQuery === undefined ? undefined : parseArticleLanguage(languageQuery);
+        const language = languageQuery === undefined ? undefined : parseArticleLanguage(languageQuery) ?? undefined;
 
         if (languageQuery !== undefined && !language) {
             return c.text('Unsupported article language', 400);
@@ -351,13 +432,24 @@ export function FeedService(): Hono<{
 
         const page_num = (page ? parseInt(page) > 0 ? parseInt(page) : 1 : 1) - 1;
         const limit_num = limit ? parseInt(limit) > 50 ? 50 : parseInt(limit) : 20;
+        const publicFeedListCacheKey = canUsePublicFeedListCache(admin, uid, type)
+            ? getPublicFeedListCacheKey(c, { page: page_num + 1, limit: limit_num, language })
+            : null;
+
+        if (publicFeedListCacheKey) {
+            const cachedResponse = await profileAsync(c, 'feed_list_edge_cache', () => getPublicFeedListCacheResponse(publicFeedListCacheKey));
+            if (cachedResponse) {
+                return cachedResponse;
+            }
+        }
+
         const cacheKey = `feeds_${type}_${language || 'all'}_${page_num}_${limit_num}`;
         const cached = await profileAsync(c, 'feed_list_cache_get', () => cache.get(cacheKey));
 
         if (cached) {
             const cachedData = cached as any;
             const dataWithVectorStatus = await profileAsync(c, 'feed_list_cached_vector_status', () => attachVectorizedStatus(db, Array.isArray(cachedData.data) ? cachedData.data : []));
-            return c.json({ ...cachedData, data: dataWithVectorStatus });
+            return cachePublicFeedListResponse(c, publicFeedListCacheKey, c.json({ ...cachedData, data: dataWithVectorStatus }));
         }
 
         const visibilityWhere = type === 'draft'
@@ -370,7 +462,7 @@ export function FeedService(): Hono<{
         const size = await profileAsync(c, 'feed_list_count', () => db.select({ count: count() }).from(feeds).where(where));
 
         if (size[0].count === 0) {
-            return c.json({ size: 0, data: [], hasNext: false });
+            return cachePublicFeedListResponse(c, publicFeedListCacheKey, c.json({ size: 0, data: [], hasNext: false }));
         }
 
         const feed_list = (await profileAsync(c, 'feed_list_db', () => db.query.feeds.findMany({
@@ -412,7 +504,7 @@ export function FeedService(): Hono<{
         }
 
         const dataWithVectorStatus = await profileAsync(c, 'feed_list_vector_status', () => attachVectorizedStatus(db, data.data));
-        return c.json({ ...data, data: dataWithVectorStatus });
+        return cachePublicFeedListResponse(c, publicFeedListCacheKey, c.json({ ...data, data: dataWithVectorStatus }));
     });
 
     // GET /feed/translation-candidates - List articles eligible as a translation source

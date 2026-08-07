@@ -89,6 +89,69 @@ describe('FeedService', () => {
             expect(data.size).toBe(0);
             expect(data.data).toEqual([]);
         });
+        it('should cache public feed lists in the edge cache', async () => {
+            await clientConfig.set('cache.enabled', false);
+
+            const createRes = await app.request('/', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer mock_token_1',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    title: 'Cached List Feed',
+                    content: 'Cached List Content',
+                    listed: true,
+                    draft: false,
+                    tags: [],
+                }),
+            }, env);
+
+            expect(createRes.status).toBe(200);
+            const cacheStore = new Map<string, Response>();
+            const originalCaches = (globalThis as any).caches;
+            const waitUntilPromises: Promise<unknown>[] = [];
+            const executionCtx = {
+                waitUntil: (promise: Promise<unknown>) => {
+                    waitUntilPromises.push(Promise.resolve(promise));
+                },
+                passThroughOnException: () => {},
+            } as unknown as ExecutionContext;
+
+            (globalThis as any).caches = {
+                default: {
+                    match: async (request: Request) => cacheStore.get(request.url)?.clone(),
+                    put: async (request: Request, response: Response) => {
+                        cacheStore.set(request.url, response.clone());
+                    },
+                },
+            };
+
+            try {
+                const firstRes = await app.request('/?page=1&limit=5&type=normal&language=en', { method: 'GET' }, env, executionCtx);
+                expect(firstRes.status).toBe(200);
+                expect(firstRes.headers.get('X-Rin-Feed-List-Cache')).toBe('MISS');
+                expect(firstRes.headers.get('Cache-Control')).toBe('no-store');
+                expect(waitUntilPromises).toHaveLength(1);
+                await Promise.all(waitUntilPromises);
+
+                waitUntilPromises.length = 0;
+                const secondRes = await app.request('/?language=en&type=normal&limit=5&page=1', { method: 'GET' }, env, executionCtx);
+                expect(secondRes.status).toBe(200);
+                expect(secondRes.headers.get('X-Rin-Feed-List-Cache')).toBe('HIT');
+                expect(secondRes.headers.get('Cache-Control')).toBe('no-store');
+                expect(waitUntilPromises).toHaveLength(0);
+
+                const secondData = await secondRes.json() as any;
+                expect(secondData.data.map((feed: any) => feed.title)).toContain('Cached List Feed');
+            } finally {
+                if (originalCaches === undefined) {
+                    delete (globalThis as any).caches;
+                } else {
+                    (globalThis as any).caches = originalCaches;
+                }
+            }
+        });
         it('should filter feeds by language and expose linked translations', async () => {
             const englishResponse = await app.request('/', {
                 method: 'POST',
