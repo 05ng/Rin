@@ -57,6 +57,7 @@ export function TimelinePage() {
         <>
             <Helmet>
                 <title>{`${t('timeline')} - ${siteConfig.name}`}</title>
+                <meta name="robots" content="noindex,follow" />
                 <meta property="og:site_name" content={siteName} />
                 <meta property="og:title" content={t('timeline')} />
                 <meta property="og:image" content={siteConfig.avatar} />

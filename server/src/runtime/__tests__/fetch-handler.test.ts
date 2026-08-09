@@ -371,6 +371,34 @@ describe("handleFetch", () => {
     expect(getAppFetch).toHaveBeenCalledTimes(0);
   });
 
+  it("sets noindex robots header for sitemap-excluded static pages", async () => {
+    const { handleFetch } = await import("../fetch-handler");
+    const assetFetch = mock(async () => new Response("<html>app shell</html>", {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html",
+      },
+    }));
+
+    const response = await handleFetch(
+      new Request("http://localhost/timeline"),
+      {
+        ASSETS: {
+          fetch: assetFetch,
+        },
+      } as unknown as Env,
+      {
+        waitUntil: () => {},
+        passThroughOnException: () => {},
+      } as unknown as ExecutionContext
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("X-Robots-Tag")).toBe("noindex, follow");
+    expect(await response.text()).toBe("<html>app shell</html>");
+    expect(getAppFetch).toHaveBeenCalledTimes(0);
+  });
+
   it("routes /api/blob requests to the app before static assets", async () => {
     getAppFetch.mockResolvedValue(new Response("blob-body", { status: 200 }));
 

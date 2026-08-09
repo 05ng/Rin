@@ -87,6 +87,7 @@ export function FriendsPage() {
     return (<>
         <Helmet>
             <title>{`${t('friends.title')} - ${siteConfig.name}`}</title>
+            <meta name="robots" content="noindex,follow" />
             <meta property="og:site_name" content={siteName} />
             <meta property="og:title" content={t('friends.title')} />
             <meta property="og:image" content={siteConfig.avatar} />

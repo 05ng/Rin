@@ -63,12 +63,9 @@ export function SitemapService(): Hono {
 
         const staticRoutes = [
             '/',
-            '/timeline',
             '/moments',
-            '/friends',
             '/game',
             '/tools',
-            '/hashtags'
         ];
 
         const siteLastMod = feedList[0]?.updatedAt ? feedList[0].updatedAt.toISOString().split('T')[0] : undefined;

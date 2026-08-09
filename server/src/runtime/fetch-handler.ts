@@ -4,6 +4,7 @@ import { path_join } from "../utils/path";
 
 const ROOT_FEED_PATTERN = /^\/(rss\.xml|atom\.xml|rss\.json|feed\.json|feed\.xml|sitemap\.xml)$/;
 const APP_PUBLIC_ROUTE_PATTERN = /^\/(favicon|favicon\.ico)(?:\/|$)/;
+const NOINDEX_STATIC_ROUTE_PATTERN = /^\/(?:friends|hashtags|timeline)\/?$/;
 const DEFAULT_CANONICAL_HOST = "agenticlife.org";
 const DEFAULT_SITE_NAME = "Agentic Life";
 const HTML_CONTENT_TYPE_PATTERN = /\btext\/html\b/i;
@@ -57,6 +58,10 @@ function isRootFeedRequest(pathname: string) {
 
 function isAppPublicRoute(pathname: string) {
   return APP_PUBLIC_ROUTE_PATTERN.test(pathname);
+}
+
+function isNoindexStaticRoute(pathname: string) {
+  return NOINDEX_STATIC_ROUTE_PATTERN.test(pathname);
 }
 
 function isStaticAssetRequest(pathname: string) {
@@ -303,6 +308,9 @@ export async function handleFetch(request: Request, env: Env, ctx: ExecutionCont
     const newHeaders = new Headers(indexResponse.headers);
     newHeaders.delete("ETag");
     newHeaders.delete("Last-Modified");
+    if (isNoindexStaticRoute(pathname)) {
+      newHeaders.set("X-Robots-Tag", "noindex, follow");
+    }
     newHeaders.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
     
     return new Response(indexResponse.body, {

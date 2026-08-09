@@ -41,6 +41,9 @@ describe("SitemapService", () => {
 
         expect(xml).toContain('xmlns:xhtml="http://www.w3.org/1999/xhtml"');
         expect(xml).toContain("<loc>https://agenticlife.org/</loc>");
+        expect(xml).not.toContain("<loc>https://agenticlife.org/friends</loc>");
+        expect(xml).not.toContain("<loc>https://agenticlife.org/hashtags</loc>");
+        expect(xml).not.toContain("<loc>https://agenticlife.org/timeline</loc>");
         expect(xml).toContain("<lastmod>2026-01-03</lastmod>");
         expect(xml).toContain("<loc>https://agenticlife.org/about</loc>");
         expect(xml).toContain('<xhtml:link rel="alternate" hreflang="en" href="https://agenticlife.org/about" />');
