@@ -86,7 +86,7 @@ export interface FeedListResponse {
     updatedAt: string;
     pv: number;
     uv: number;
-    vectorized: boolean;
+    vectorized?: boolean;
   }>;
   hasNext: boolean;
 }

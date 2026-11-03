@@ -16,8 +16,12 @@ type ArticleVectorBadgeProps = {
     className?: string;
 };
 
-export function ArticleVectorBadge({ vectorized = false, className = "" }: ArticleVectorBadgeProps) {
+export function ArticleVectorBadge({ vectorized, className = "" }: ArticleVectorBadgeProps) {
     const { t } = useTranslation();
+    if (vectorized === undefined) {
+        return null;
+    }
+
     const label = vectorized ? t("article.vectorized") : t("article.not_vectorized");
     const badgeClass = [
         "mt-1 inline-flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-bold leading-none",

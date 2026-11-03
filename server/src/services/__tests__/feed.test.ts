@@ -79,6 +79,8 @@ describe('FeedService', () => {
             const data = await listRes.json() as any;
             expect(data.size).toBe(2);
             expect(data.data).toBeArray();
+            expect(data.data.every((feed: any) => feed.vectorized === undefined)).toBe(true);
+            expect(listRes.headers.get('Server-Timing') || '').not.toContain('feed_list_vector_status');
         });
 
         it('should return empty list when no feeds exist', async () => {
@@ -144,6 +146,7 @@ describe('FeedService', () => {
 
                 const secondData = await secondRes.json() as any;
                 expect(secondData.data.map((feed: any) => feed.title)).toContain('Cached List Feed');
+                expect(secondData.data.every((feed: any) => feed.vectorized === undefined)).toBe(true);
             } finally {
                 if (originalCaches === undefined) {
                     delete (globalThis as any).caches;
@@ -286,6 +289,7 @@ describe('FeedService', () => {
             expect(res.status).toBe(200);
             const data = await res.json() as any;
             expect(data.size).toBe(1);
+            expect(data.data.every((feed: any) => typeof feed.vectorized === 'boolean')).toBe(true);
         });
     });
 

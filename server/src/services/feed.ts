@@ -316,6 +316,10 @@ async function attachVectorizedStatus<T extends { id: number }>(db: DB, rows: T[
     return rows.map((row) => ({ ...row, vectorized: vectorizedIds.has(row.id) }));
 }
 
+function omitVectorizedStatus<T extends { vectorized?: boolean }>(rows: T[]) {
+    return rows.map(({ vectorized, ...row }) => row);
+}
+
 async function getFeedVectorized(db: DB, feedId: number) {
     const state = await db.query.feedVectorIndexes.findFirst({
         where: eq(feedVectorIndexes.feedId, feedId),
@@ -448,8 +452,11 @@ export function FeedService(): Hono<{
 
         if (cached) {
             const cachedData = cached as any;
-            const dataWithVectorStatus = await profileAsync(c, 'feed_list_cached_vector_status', () => attachVectorizedStatus(db, Array.isArray(cachedData.data) ? cachedData.data : []));
-            return cachePublicFeedListResponse(c, publicFeedListCacheKey, c.json({ ...cachedData, data: dataWithVectorStatus }));
+            const cachedRows = Array.isArray(cachedData.data) ? cachedData.data : [];
+            const responseRows = publicFeedListCacheKey
+                ? omitVectorizedStatus(cachedRows)
+                : await profileAsync(c, 'feed_list_cached_vector_status', () => attachVectorizedStatus(db, cachedRows));
+            return cachePublicFeedListResponse(c, publicFeedListCacheKey, c.json({ ...cachedData, data: responseRows }));
         }
 
         const visibilityWhere = type === 'draft'
@@ -503,8 +510,10 @@ export function FeedService(): Hono<{
             await profileAsync(c, 'feed_list_cache_set', () => cache.set(cacheKey, data));
         }
 
-        const dataWithVectorStatus = await profileAsync(c, 'feed_list_vector_status', () => attachVectorizedStatus(db, data.data));
-        return cachePublicFeedListResponse(c, publicFeedListCacheKey, c.json({ ...data, data: dataWithVectorStatus }));
+        const responseRows = publicFeedListCacheKey
+            ? omitVectorizedStatus(data.data)
+            : await profileAsync(c, 'feed_list_vector_status', () => attachVectorizedStatus(db, data.data));
+        return cachePublicFeedListResponse(c, publicFeedListCacheKey, c.json({ ...data, data: responseRows }));
     });
 
     // GET /feed/translation-candidates - List articles eligible as a translation source
