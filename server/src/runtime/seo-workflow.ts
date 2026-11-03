@@ -1,6 +1,7 @@
 import puppeteer from "@cloudflare/puppeteer";
 import { WorkflowEntrypoint, WorkflowStep, WorkflowEvent } from "cloudflare:workers";
 import { path_join } from "../utils/path";
+import { stripCloudflareInsightsBeacon } from "./fetch-handler";
 
 type SEORenderParams = {
   feedId?: number;
@@ -82,7 +83,14 @@ export class SEORenderWorkflow extends WorkflowEntrypoint<Env, SEORenderParams> 
             console.warn(`[SEO Workflow] Timeout waiting for content to render on ${fullUrl}`);
           }
 
-          const html = await page.content();
+          try {
+            await page.evaluate(() => {
+              document.querySelectorAll('script[src*="cloudflareinsights.com"], script[data-cf-beacon]').forEach((el) => el.remove());
+            });
+          } catch {}
+
+          const rawHtml = await page.content();
+          const html = stripCloudflareInsightsBeacon(rawHtml);
           
           await this.env.R2_BUCKET!.put(key, html, {
             httpMetadata: { contentType: "text/html" }

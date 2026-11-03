@@ -211,9 +211,9 @@ describe("handleFetch", () => {
     expect(getAppFetch).toHaveBeenCalledTimes(0);
   });
 
-  it("normalizes stale prerendered SEO HTML before serving it", async () => {
+  it("normalizes stale prerendered SEO HTML and strips Cloudflare beacon before serving it", async () => {
     getStorageObject.mockResolvedValue(new Response(
-      '<!doctype html><html lang="en"><head><title>Old</title><meta property="og:type" content="article"><meta property="og:site_name" content=""><meta name="og:description" content="desc"><link rel="canonical" href="https://agenticlife.org/en/lumina-tick"></head><body><a href="/en/lumina-tick">Read</a><p>Use <script> tags safely.</script></p></body></html>',
+      '<!doctype html><html lang="en"><head><title>Old</title><meta property="og:type" content="article"><meta property="og:site_name" content=""><meta name="og:description" content="desc"><link rel="canonical" href="https://agenticlife.org/en/lumina-tick"></head><body><a href="/en/lumina-tick">Read</a><p>Content</p><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-xxx" data-cf-beacon="{\"version\":\"2024.11.0\"}" crossorigin="anonymous"></script>&lt;script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-xxx" data-cf-beacon="{\"version\":\"2024.11.0\"}" crossorigin="anonymous"&gt;&lt;/script&gt;</body></html>',
       {
         headers: {
           "Content-Type": "text/html",
@@ -244,7 +244,26 @@ describe("handleFetch", () => {
     expect(html).toContain('property="og:description" content="desc"');
     expect(html).toContain('href="https://agenticlife.org/lumina-tick"');
     expect(html).toContain('href="/lumina-tick"');
-    expect(html).toContain("&lt;script> tags safely.&lt;/script>");
+    expect(html).toContain("<p>Content</p>");
+    expect(html).not.toContain("static.cloudflareinsights.com");
+    expect(html).not.toContain("&lt;script");
+  });
+
+  it("stripCloudflareInsightsBeacon strips raw and escaped beacon scripts but keeps valid scripts", async () => {
+    const { stripCloudflareInsightsBeacon } = await import("../fetch-handler");
+
+    const input = `
+      <div id="root">Hello</div>
+      &lt;script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v123" integrity="sha512-xxx" data-cf-beacon="{\\"token\\":\\"abc\\"}" crossorigin="anonymous"&gt;&lt;/script&gt;
+      <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v123" integrity="sha512-xxx" data-cf-beacon="{\\"token\\":\\"abc\\"}" crossorigin="anonymous"></script>
+      <script type="module" src="/assets/index-abc.js"></script>
+    `;
+
+    const cleaned = stripCloudflareInsightsBeacon(input);
+    expect(cleaned).not.toContain("static.cloudflareinsights.com");
+    expect(cleaned).not.toContain("&lt;script");
+    expect(cleaned).toContain('<script type="module" src="/assets/index-abc.js"></script>');
+    expect(cleaned).toContain('<div id="root">Hello</div>');
   });
 
 
@@ -312,6 +331,7 @@ describe("handleFetch", () => {
     );
 
     expect(await response.text()).toBe("asset-body");
+    expect(response.headers.get("Cache-Control")).toBe("public, max-age=31536000, immutable");
     expect(assetFetch).toHaveBeenCalledTimes(1);
     expect(getAppFetch).toHaveBeenCalledTimes(0);
   });

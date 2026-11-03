@@ -72,6 +72,10 @@ function isStaticAssetRequest(pathname: string) {
   );
 }
 
+function isImmutableBuildAssetRequest(pathname: string) {
+  return pathname.startsWith("/assets/");
+}
+
 function isPrerenderedArticleCandidate(pathname: string) {
   const articlePathname = pathname.replace(/^\/(?:en|zh-CN)(?=\/)/, "") || "/";
 
@@ -142,14 +146,10 @@ function normalizeDefaultEnglishPath(pathname: string) {
   return pathname.replace(/^\/en(?=\/)/, "") || "/";
 }
 
-function escapeBodyScriptTags(html: string) {
-  const headEnd = html.search(/<\/head>/i);
-  if (headEnd === -1) {
-    return html;
-  }
-
-  const bodyStart = headEnd + html.match(/<\/head>/i)![0].length;
-  return html.slice(0, bodyStart) + html.slice(bodyStart).replace(/<\/?script\b/gi, (match) => match.replace("<", "&lt;"));
+export function stripCloudflareInsightsBeacon(html: string) {
+  return html
+    .replace(/&lt;script\b[\s\S]*?(?:static\.cloudflareinsights\.com\/beacon|data-cf-beacon=)[\s\S]*?&lt;\/script&gt;\s*/gi, "")
+    .replace(/<script\b[^>]*?(?:static\.cloudflareinsights\.com\/beacon|data-cf-beacon=)[\s\S]*?<\/script>\s*/gi, "");
 }
 
 function ensureHeadTag(html: string, tag: string, existsPattern: RegExp) {
@@ -223,7 +223,7 @@ async function normalizePrerenderedHtml(html: string, requestUrl: URL, env: Env)
     /<link\b[^>]*rel=(["'])canonical\1/i,
   );
 
-  return escapeBodyScriptTags(normalized);
+  return stripCloudflareInsightsBeacon(normalized);
 }
 
 async function tryServeAsset(request: Request, env: Env) {
@@ -234,9 +234,21 @@ async function tryServeAsset(request: Request, env: Env) {
   try {
     const asset = await env.ASSETS.fetch(request);
     if (asset.status === 200 || (asset.status >= 300 && asset.status < 400)) {
-      if (isStaticAssetRequest(new URL(request.url).pathname) && isHtmlResponse(asset)) {
+      const pathname = new URL(request.url).pathname;
+      if (isStaticAssetRequest(pathname) && isHtmlResponse(asset)) {
         return null;
       }
+
+      if (isImmutableBuildAssetRequest(pathname)) {
+        const headers = new Headers(asset.headers);
+        headers.set("Cache-Control", "public, max-age=31536000, immutable");
+        return new Response(asset.body, {
+          status: asset.status,
+          statusText: asset.statusText,
+          headers,
+        });
+      }
+
       return asset;
     }
   } catch {}
