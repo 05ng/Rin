@@ -1,8 +1,21 @@
 import { Hono } from "hono";
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, count } from "drizzle-orm";
 import type { AppContext } from "../core/hono-types";
-import { feeds } from "../db/schema";
+import { feeds, moments } from "../db/schema";
 import { profileAsync } from "../core/server-timing";
+
+const DEFAULT_CANONICAL_HOST = "agenticlife.org";
+
+function getCanonicalBaseUrl(env: Env, reqUrl: string) {
+    if (env.CANONICAL_HOST) {
+        return `https://${env.CANONICAL_HOST}`;
+    }
+    const origin = new URL(reqUrl).origin;
+    if (origin.includes("agenticlife.org")) {
+        return `https://${DEFAULT_CANONICAL_HOST}`;
+    }
+    return origin;
+}
 
 function articlePath(id: number, alias: string | null, language: string) {
     const path = alias ? `/${encodeURIComponent(alias)}` : `/feed/${id}`;
@@ -46,7 +59,7 @@ export function SitemapService(): Hono {
 
     app.get('/sitemap.xml', async (c: AppContext) => {
         const db = c.get('db');
-        const frontendUrl = new URL(c.req.url).origin;
+        const frontendUrl = getCanonicalBaseUrl(c.env, c.req.url);
 
         // Fetch feeds
         const feedList = await profileAsync(c, 'sitemap_feed_list', () => db.query.feeds.findMany({
@@ -61,11 +74,17 @@ export function SitemapService(): Hono {
             }
         }));
 
+        // Only include /moments in sitemap if moments actually exist
+        const momentsCountResult = await profileAsync(c, 'sitemap_moments_count', () =>
+            db.select({ count: count() }).from(moments)
+        );
+        const hasMoments = (momentsCountResult[0]?.count ?? 0) > 0;
+
         const staticRoutes = [
             '/',
-            '/moments',
-            '/game',
+            ...(hasMoments ? ['/moments'] : []),
             '/tools',
+            '/game',
         ];
 
         const siteLastMod = feedList[0]?.updatedAt ? feedList[0].updatedAt.toISOString().split('T')[0] : undefined;

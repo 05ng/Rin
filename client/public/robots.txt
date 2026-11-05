@@ -4,9 +4,8 @@ Disallow: /login
 Disallow: /callback
 Disallow: /profile
 Disallow: /user/
-Disallow: /api/auth/
-Disallow: /api/storage/
-Disallow: /api/wp/
+Disallow: /api/
+Allow: /api/config/client/bootstrap.js
 Allow: /
 
 Sitemap: https://agenticlife.org/sitemap.xml

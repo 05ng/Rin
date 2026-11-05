@@ -31,7 +31,7 @@ export class SEORenderWorkflow extends WorkflowEntrypoint<Env, SEORenderParams> 
     }
 
     // Determine paths to render
-    const pathsToRender = ["/"]; // Always render homepage to keep feeds fresh
+    const pathsToRender = ["/", "/tools", "/game"]; // Always render homepage and static landing pages to keep them indexed and fresh
     if (!isDelete) {
       if (urlPath) {
         pathsToRender.push(urlPath);

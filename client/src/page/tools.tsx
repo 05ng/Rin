@@ -46,6 +46,16 @@ export function ToolsPage() {
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-5 py-4">
       <Helmet>
         <title>{`${copy.title} - ${siteConfig.name}`}</title>
+        <meta name="description" content={copy.description} />
+        <link rel="canonical" href="https://agenticlife.org/tools" />
+        <meta property="og:title" content={`${copy.title} - ${siteConfig.name}`} />
+        <meta property="og:description" content={copy.description} />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://agenticlife.org/tools" />
+        <meta property="og:site_name" content={siteConfig.name} />
+        <meta name="twitter:card" content="summary" />
+        <meta name="twitter:title" content={`${copy.title} - ${siteConfig.name}`} />
+        <meta name="twitter:description" content={copy.description} />
       </Helmet>
 
       <section>

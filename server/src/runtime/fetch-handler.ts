@@ -39,7 +39,7 @@ function canonicalRedirect(url: URL, env: Env) {
   canonicalUrl.protocol = "https:";
   canonicalUrl.hostname = canonicalHost;
 
-  return Response.redirect(canonicalUrl.toString(), 308);
+  return Response.redirect(canonicalUrl.toString(), 301);
 }
 
 function isApiRequest(pathname: string) {

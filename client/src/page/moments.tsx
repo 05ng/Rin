@@ -166,11 +166,17 @@ export function MomentsPage() {
         <>
             <Helmet>
                 <title>{`${t('moments.title')} - ${siteConfig.name}`}</title>
+                <meta name="description" content={siteConfig.description || "Micro-updates and thoughts."} />
+                <link rel="canonical" href="https://agenticlife.org/moments" />
                 <meta property="og:site_name" content={siteName} />
-                <meta property="og:title" content={t('moments.title')} />
+                <meta property="og:title" content={`${t('moments.title')} - ${siteConfig.name}`} />
+                <meta property="og:description" content={siteConfig.description || "Micro-updates and thoughts."} />
                 <meta property="og:image" content={siteConfig.avatar} />
-                <meta property="og:type" content="article" />
-                <meta property="og:url" content={document.URL} />
+                <meta property="og:type" content="website" />
+                <meta property="og:url" content="https://agenticlife.org/moments" />
+                <meta name="twitter:card" content="summary" />
+                <meta name="twitter:title" content={`${t('moments.title')} - ${siteConfig.name}`} />
+                <meta name="twitter:description" content={siteConfig.description || "Micro-updates and thoughts."} />
             </Helmet>
             <Waiting for={!loading}>
                 <main className="w-full flex flex-col justify-center items-center mb-8 ani-show">

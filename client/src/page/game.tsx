@@ -88,7 +88,19 @@ export function GamePage() {
   const siteConfig = useSiteConfig();
   const { t } = useTranslation();
   return <main className='mx-auto flex w-full max-w-5xl flex-col gap-5 py-4'>
-    <Helmet><title>{siteConfig.name} - {t("game")}</title></Helmet>
+    <Helmet>
+      <title>{`${t("game")} - ${siteConfig.name}`}</title>
+      <meta name="description" content={t("game_description", "Fun interactive mini-games and experiments.")} />
+      <link rel="canonical" href="https://agenticlife.org/game" />
+      <meta property="og:title" content={`${t("game")} - ${siteConfig.name}`} />
+      <meta property="og:description" content={t("game_description", "Fun interactive mini-games and experiments.")} />
+      <meta property="og:type" content="website" />
+      <meta property="og:url" content="https://agenticlife.org/game" />
+      <meta property="og:site_name" content={siteConfig.name} />
+      <meta name="twitter:card" content="summary" />
+      <meta name="twitter:title" content={`${t("game")} - ${siteConfig.name}`} />
+      <meta name="twitter:description" content={t("game_description", "Fun interactive mini-games and experiments.")} />
+    </Helmet>
     <section><h1 className='text-3xl font-bold text-neutral-900 dark:text-white'>{t("game")}</h1><p className='mt-2 text-neutral-600 dark:text-neutral-300'>{t("game_description")}</p></section>
     <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
       <Link href='/game/water-fall' className='group rounded-2xl border border-black/10 bg-white p-5 transition hover:-translate-y-0.5 hover:border-theme/40 hover:shadow-md dark:border-white/10 dark:bg-dark'>

@@ -44,6 +44,9 @@ describe("SitemapService", () => {
         expect(xml).not.toContain("<loc>https://agenticlife.org/friends</loc>");
         expect(xml).not.toContain("<loc>https://agenticlife.org/hashtags</loc>");
         expect(xml).not.toContain("<loc>https://agenticlife.org/timeline</loc>");
+        expect(xml).not.toContain("<loc>https://agenticlife.org/moments</loc>");
+        expect(xml).toContain("<loc>https://agenticlife.org/tools</loc>");
+        expect(xml).toContain("<loc>https://agenticlife.org/game</loc>");
         expect(xml).toContain("<lastmod>2026-01-03</lastmod>");
         expect(xml).toContain("<loc>https://agenticlife.org/about</loc>");
         expect(xml).toContain('<xhtml:link rel="alternate" hreflang="en" href="https://agenticlife.org/about" />');
@@ -56,5 +59,17 @@ describe("SitemapService", () => {
         expect(xml).not.toContain("draft-post");
         expect(xml).not.toContain("hidden-post");
         expect(xml.match(/<loc>https:\/\/agenticlife\.org\/about<\/loc>/g) ?? []).toHaveLength(1);
+    });
+
+    it("includes /moments when moments exist in database", async () => {
+        sqlite.exec(`
+            INSERT INTO moments (id, content, uid, created_at, updated_at) VALUES
+                (1, 'First moment', 1, unixepoch('2026-01-02T00:00:00Z'), unixepoch('2026-01-02T00:00:00Z'));
+        `);
+
+        const response = await app.request("https://agenticlife.org/sitemap.xml", { method: "GET" }, env);
+        const xml = await response.text();
+
+        expect(xml).toContain("<loc>https://agenticlife.org/moments</loc>");
     });
 });

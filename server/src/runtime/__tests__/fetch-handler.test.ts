@@ -112,7 +112,7 @@ describe("handleFetch", () => {
       } as unknown as ExecutionContext
     );
 
-    expect(response.status).toBe(308);
+    expect(response.status).toBe(301);
     expect(response.headers.get("Location")).toBe("https://agenticlife.org/about?ref=test");
     expect(getAppFetch).toHaveBeenCalledTimes(0);
   });
@@ -129,7 +129,7 @@ describe("handleFetch", () => {
       } as unknown as ExecutionContext
     );
 
-    expect(response.status).toBe(308);
+    expect(response.status).toBe(301);
     expect(response.headers.get("Location")).toBe("https://agenticlife.org/en/about");
     expect(getAppFetch).toHaveBeenCalledTimes(0);
   });
@@ -148,7 +148,7 @@ describe("handleFetch", () => {
       } as unknown as ExecutionContext
     );
 
-    expect(response.status).toBe(308);
+    expect(response.status).toBe(301);
     expect(response.headers.get("Location")).toBe("https://example.com/en/about");
     expect(getAppFetch).toHaveBeenCalledTimes(0);
   });
