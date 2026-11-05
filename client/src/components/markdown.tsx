@@ -260,6 +260,12 @@ export function Markdown({ content }: { content: string }) {
           themeCSS: transparentMermaidElementThemeCSS,
         });
         await mermaid.run({ suppressErrors: true, nodes: mermaidNodes });
+        for (const node of mermaidNodes) {
+          if (node.querySelector(".error-text, .error-icon")) {
+            node.innerHTML = "";
+            node.textContent = node.getAttribute("data-original-code") || "";
+          }
+        }
       } catch (error) {
         console.error("Failed to render Mermaid diagram", error);
       }
@@ -357,7 +363,7 @@ export function Markdown({ content }: { content: string }) {
             if (language === "mermaid") {
               return (
                 <div className="my-4 overflow-x-auto rounded-xl bg-white p-4 dark:bg-neutral-950">
-                  <pre key={`mermaid-${colorMode}-${code}`} className="mermaid">{code}</pre>
+                  <pre key={`mermaid-${colorMode}-${code}`} className="mermaid" data-original-code={code}>{code}</pre>
                 </div>
               );
             }

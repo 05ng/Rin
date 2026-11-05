@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import { wrapTime } from "hono/timing";
+import { and, eq } from "drizzle-orm";
 import type { AppContext } from "../core/hono-types";
+import { feeds } from "../db/schema";
 import { setAIConfig, getAIConfig } from "../utils/db-config";
 import { testAIModel } from "../utils/ai";
 import { notify } from "../utils/webhook";
@@ -513,6 +515,95 @@ export function ConfigService(): Hono {
         const cache = c.get('cache');
         await cache.clear();
         return c.text('OK');
+    });
+
+    // POST /config/seo/render - trigger SEO workflow re-rendering
+    app.post('/seo/render', async (c: AppContext) => {
+        const admin = c.get('admin');
+        if (!admin) {
+            return c.text('Unauthorized', 401);
+        }
+
+        const env = c.get('env');
+        if (!env.SEO_WORKFLOW) {
+            return c.json({ error: 'SEO_WORKFLOW not configured' }, 400);
+        }
+
+        const db = c.get('db');
+        const baseUrl = env.CANONICAL_HOST ? `https://${env.CANONICAL_HOST}` : new URL(c.req.url).origin.includes("agenticlife.org") ? "https://agenticlife.org" : new URL(c.req.url).origin;
+
+        const body = await c.req.json<{ paths?: string[] }>().catch(() => ({ paths: undefined }));
+        let targetPaths = body?.paths;
+
+        if (!targetPaths || targetPaths.length === 0) {
+            const feedList = await db.query.feeds.findMany({
+                where: and(eq(feeds.draft, 0), eq(feeds.listed, 1)),
+                columns: {
+                    id: true,
+                    alias: true,
+                    language: true,
+                }
+            });
+
+            targetPaths = [
+                '/',
+                '/about',
+                '/zh-CN/about',
+                '/tools',
+                '/game',
+            ];
+
+            for (const feed of feedList) {
+                const path = feed.alias ? `/${feed.alias}` : `/feed/${feed.id}`;
+                const fullPath = feed.language === 'en' ? path : `/${feed.language}${path}`;
+                targetPaths.push(fullPath);
+            }
+        }
+
+        const uniquePaths = Array.from(new Set(targetPaths));
+
+        const instance = await env.SEO_WORKFLOW.create({
+            params: {
+                paths: uniquePaths,
+                baseUrl,
+            }
+        });
+
+        return c.json({
+            ok: true,
+            workflowId: instance.id,
+            pathsCount: uniquePaths.length,
+            paths: uniquePaths,
+        });
+    });
+
+    // DELETE /config/seo/cache - purge R2 prerender cache
+    app.delete('/seo/cache', async (c: AppContext) => {
+        const admin = c.get('admin');
+        if (!admin) {
+            return c.text('Unauthorized', 401);
+        }
+
+        const env = c.get('env');
+        if (!env.R2_BUCKET) {
+            return c.json({ error: 'R2_BUCKET not configured' }, 400);
+        }
+
+        const folder = env.S3_CACHE_FOLDER || "cache/";
+        let cursor: string | undefined;
+        let deletedCount = 0;
+
+        do {
+            const list = await env.R2_BUCKET.list({ prefix: folder, cursor });
+            if (list.objects.length > 0) {
+                const keys = list.objects.map(obj => obj.key);
+                await env.R2_BUCKET.delete(keys);
+                deletedCount += keys.length;
+            }
+            cursor = list.truncated ? list.cursor : undefined;
+        } while (cursor);
+
+        return c.json({ ok: true, deletedCount });
     });
 
     return app;

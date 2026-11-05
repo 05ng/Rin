@@ -634,6 +634,36 @@ export function Settings() {
             alertTitle={t("settings.cache.clear.confirm.title")}
             alertDescription={t("settings.cache.clear.confirm.desc")}
           />
+          <ItemButton
+            title={t("settings.seo.clear_cache.title", "Clear SEO Prerender Cache")}
+            description={t("settings.seo.clear_cache.desc", "Purge all cached prerendered HTML pages in R2 storage.")}
+            buttonTitle={t("clear")}
+            onConfirm={async () => {
+              const res = await client.config.clearSeoCache();
+              if (res.error) {
+                showAlert(res.error.value);
+              } else {
+                showAlert(t("settings.seo.clear_cache.success", "SEO cache cleared ({{count}} pages purged).", { count: res.data?.deletedCount ?? 0 }));
+              }
+            }}
+            alertTitle={t("settings.seo.clear_cache.confirm.title", "Clear SEO Prerender Cache?")}
+            alertDescription={t("settings.seo.clear_cache.confirm.desc", "This will remove all prerendered HTML snapshots from R2.")}
+          />
+          <ItemButton
+            title={t("settings.seo.render.title", "Re-render SEO Pages")}
+            description={t("settings.seo.render.desc", "Launch Cloudflare Puppeteer workflow to snapshot and cache all published articles.")}
+            buttonTitle={t("render", "Render")}
+            onConfirm={async () => {
+              const res = await client.config.renderSeo();
+              if (res.error) {
+                showAlert(res.error.value);
+              } else {
+                showAlert(t("settings.seo.render.success", "SEO rendering started for {{count}} pages (Workflow ID: {{id}}).", { count: res.data?.pathsCount ?? 0, id: res.data?.workflowId ?? "" }));
+              }
+            }}
+            alertTitle={t("settings.seo.render.confirm.title", "Trigger SEO Prerender?")}
+            alertDescription={t("settings.seo.render.confirm.desc", "This initiates a background Puppeteer crawler workflow to refresh static HTML.")}
+          />
           <ItemWithUpload
             title={t("settings.wordpress.title")}
             description={t("settings.wordpress.desc")}

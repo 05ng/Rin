@@ -544,6 +544,16 @@ class ConfigAPI {
     return this.http.delete<void>("/api/config/cache");
   }
 
+  // DELETE /api/config/seo/cache
+  async clearSeoCache(): Promise<ApiResponse<{ ok: boolean; deletedCount: number }>> {
+    return this.http.delete<{ ok: boolean; deletedCount: number }>("/api/config/seo/cache");
+  }
+
+  // POST /api/config/seo/render
+  async renderSeo(paths?: string[]): Promise<ApiResponse<{ ok: boolean; workflowId: string; pathsCount: number }>> {
+    return this.http.post<{ ok: boolean; workflowId: string; pathsCount: number }>("/api/config/seo/render", { paths });
+  }
+
   // GET /api/config/health
   async getHealth(): Promise<ApiResponse<ConfigHealthResponse>> {
     return this.http.get<ConfigHealthResponse>("/api/config/health");

@@ -249,6 +249,39 @@ describe("handleFetch", () => {
     expect(html).not.toContain("&lt;script");
   });
 
+  it("normalizes x-default hreflang to English canonical and strips stale mermaid syntax errors", async () => {
+    getStorageObject.mockResolvedValue(new Response(
+      '<!doctype html><html lang="zh-CN"><head><title>Test</title><link rel="alternate" hreflang="zh-CN" href="https://agenticlife.org/zh-CN/legacy-system-mcp"><link rel="alternate" hreflang="x-default" href="https://agenticlife.org/zh-CN/legacy-system-mcp"></head><body><p>Article</p><svg role="graphics-document document"><text class="error-text">Syntax error in text</text><text class="error-text">mermaid version 10.9.5</text></svg></body></html>',
+      {
+        headers: {
+          "Content-Type": "text/html",
+        },
+      }
+    ));
+
+    const { handleFetch } = await import("../fetch-handler");
+
+    const response = await handleFetch(
+      new Request("https://agenticlife.org/zh-CN/legacy-system-mcp", {
+        headers: {
+          "User-Agent": "Googlebot",
+        },
+      }),
+      {
+        S3_CACHE_FOLDER: "cache/",
+      } as unknown as Env,
+      {
+        waitUntil: () => {},
+        passThroughOnException: () => {},
+      } as unknown as ExecutionContext
+    );
+
+    const html = await response.text();
+    expect(html).toContain('<link rel="alternate" hreflang="x-default" href="https://agenticlife.org/legacy-system-mcp" data-seo-normalized="true">');
+    expect(html).not.toContain("Syntax error in text");
+    expect(html).not.toContain("mermaid version 10.9.5");
+  });
+
   it("stripCloudflareInsightsBeacon strips raw and escaped beacon scripts but keeps valid scripts", async () => {
     const { stripCloudflareInsightsBeacon } = await import("../fetch-handler");
 

@@ -6,13 +6,14 @@ import { stripCloudflareInsightsBeacon } from "./fetch-handler";
 type SEORenderParams = {
   feedId?: number;
   urlPath?: string;
+  paths?: string[];
   baseUrl: string;
   isDelete?: boolean;
 };
 
 export class SEORenderWorkflow extends WorkflowEntrypoint<Env, SEORenderParams> {
   async run(event: WorkflowEvent<SEORenderParams>, step: WorkflowStep) {
-    const { feedId, urlPath, baseUrl, isDelete } = event.payload;
+    const { feedId, urlPath, paths, baseUrl, isDelete } = event.payload;
 
     if (!this.env.BROWSER || !this.env.R2_BUCKET) {
       console.warn("Missing BROWSER or R2_BUCKET binding, skipping SEO render.");
@@ -33,6 +34,9 @@ export class SEORenderWorkflow extends WorkflowEntrypoint<Env, SEORenderParams> 
     // Determine paths to render
     const pathsToRender = ["/", "/tools", "/game"]; // Always render homepage and static landing pages to keep them indexed and fresh
     if (!isDelete) {
+      if (paths && Array.isArray(paths)) {
+        pathsToRender.push(...paths);
+      }
       if (urlPath) {
         pathsToRender.push(urlPath);
       } else if (feedId) {
@@ -40,8 +44,11 @@ export class SEORenderWorkflow extends WorkflowEntrypoint<Env, SEORenderParams> 
       }
     }
 
-    for (const path of pathsToRender) {
-      const stepName = path === "/" ? "render-home" : `render-${path.replace(/\//g, "-")}`;
+    const uniquePaths = Array.from(new Set(pathsToRender));
+
+    for (const path of uniquePaths) {
+      const sanitizedSlug = path === "/" ? "home" : path.replace(/[^a-zA-Z0-9_-]/g, "-").replace(/^-+|-+$/g, "");
+      const stepName = `render-${sanitizedSlug}`;
       await step.do(stepName, async () => {
         const fullUrl = `${baseUrl}${path}`;
         const folder = this.env.S3_CACHE_FOLDER || "cache/";

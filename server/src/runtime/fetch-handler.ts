@@ -238,6 +238,22 @@ async function normalizePrerenderedHtml(html: string, requestUrl: URL, env: Env)
     );
   }
 
+  const defaultEnglishPath = requestUrl.pathname.replace(/^\/(?:zh-CN|zh|en)(?=\/|$)/, "") || "/";
+  const xDefaultUrl = `${origin}${defaultEnglishPath}${requestUrl.search}`;
+
+  if (/<link\b[^>]*\bhreflang=(["'])x-default\1[^>]*>/i.test(normalized)) {
+    normalized = normalized.replace(
+      /<link\b[^>]*\bhreflang=(["'])x-default\1[^>]*>/i,
+      `<link rel="alternate" hreflang="x-default" href="${xDefaultUrl}" data-seo-normalized="true">`
+    );
+  }
+
+  if (normalized.includes("Syntax error in text") && normalized.includes("mermaid")) {
+    normalized = normalized
+      .replace(/<text\b[^>]*class=(["'])error-text\1[^>]*>[\s\S]*?<\/text>/gi, "")
+      .replace(/<svg\b[^>]*role=(["'])graphics-document document\1[\s\S]*?<\/svg>/gi, "");
+  }
+
   return stripCloudflareInsightsBeacon(normalized);
 }
 
