@@ -31,7 +31,9 @@ export function SiteMeta({ title, description, image, type = "website", children
     const siteUrl = typeof window !== 'undefined'
         ? window.location.origin
         : "https://agenticlife.org";
-    const canonicalUrl = `${siteUrl}${location}`;
+    const pageParam = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get("page") : null;
+    const pageQuery = pageParam && Number(pageParam) > 1 ? `?page=${pageParam}` : "";
+    const canonicalUrl = `${siteUrl}${location}${pageQuery}`;
     const siteIdentityId = `${siteUrl}/#organization`;
     const siteStructuredData = {
         "@context": "https://schema.org",
@@ -58,6 +60,14 @@ export function SiteMeta({ title, description, image, type = "website", children
                 inLanguage: documentLanguage,
                 publisher: {
                     "@id": siteIdentityId,
+                },
+                potentialAction: {
+                    "@type": "SearchAction",
+                    target: {
+                        "@type": "EntryPoint",
+                        urlTemplate: `${siteUrl}/search/{search_term_string}`,
+                    },
+                    "query-input": "required name=search_term_string",
                 },
             },
         ],

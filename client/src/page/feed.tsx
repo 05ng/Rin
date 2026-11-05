@@ -67,35 +67,61 @@ export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?
         ...(feed.translations ?? []),
       ]
     : [];
+  const defaultArticle = alternateArticles.find((a) => a.language === "en") || feed;
+  const xDefaultUrl = defaultArticle
+    ? new URL(articlePath(defaultArticle.id, defaultArticle.alias, defaultArticle.language), window.location.origin).toString()
+    : canonicalUrl;
   const articleStructuredData = feed
     ? {
         "@context": "https://schema.org",
-        "@type": "BlogPosting",
-        headline: feed.title ?? "Unnamed",
-        description,
-        image: seoImage ? [seoImage] : undefined,
-        datePublished: new Date(feed.createdAt).toISOString(),
-        dateModified: new Date(feed.updatedAt || feed.createdAt).toISOString(),
-        author: {
-          "@type": "Person",
-          name: feed.user.username,
-        },
-        publisher: {
-          "@type": "Organization",
-          name: siteName,
-          logo: seoImage
-            ? {
-                "@type": "ImageObject",
-                url: seoImage,
-              }
-            : undefined,
-        },
-        mainEntityOfPage: {
-          "@type": "WebPage",
-          "@id": canonicalUrl,
-        },
-        inLanguage: feed.language || "en",
-        keywords: hashtags.map(({ name }) => name).join(", ") || undefined,
+        "@graph": [
+          {
+            "@type": "BlogPosting",
+            headline: feed.title ?? "Unnamed",
+            description,
+            image: seoImage ? [seoImage] : undefined,
+            datePublished: new Date(feed.createdAt).toISOString(),
+            dateModified: new Date(feed.updatedAt || feed.createdAt).toISOString(),
+            author: {
+              "@type": "Person",
+              name: feed.user.username,
+              url: typeof window !== "undefined" ? `${window.location.origin}/about` : "https://agenticlife.org/about",
+            },
+            publisher: {
+              "@type": "Organization",
+              name: siteName,
+              logo: seoImage
+                ? {
+                    "@type": "ImageObject",
+                    url: seoImage,
+                  }
+                : undefined,
+            },
+            mainEntityOfPage: {
+              "@type": "WebPage",
+              "@id": canonicalUrl,
+            },
+            inLanguage: feed.language || "en",
+            keywords: hashtags.map(({ name }) => name).join(", ") || undefined,
+          },
+          {
+            "@type": "BreadcrumbList",
+            itemListElement: [
+              {
+                "@type": "ListItem",
+                position: 1,
+                name: "Home",
+                item: typeof window !== "undefined" ? window.location.origin : "https://agenticlife.org",
+              },
+              {
+                "@type": "ListItem",
+                position: 2,
+                name: feed.title ?? "Article",
+                item: canonicalUrl,
+              },
+            ],
+          },
+        ],
       }
     : undefined;
   function deleteFeed() {
@@ -201,7 +227,7 @@ export function FeedPage({ id, routeLang, TOC, clean }: { id: string, routeLang?
               href={new URL(articlePath(article.id, article.alias, article.language), window.location.origin).toString()}
             />
           ))}
-          <link rel="alternate" hrefLang="x-default" href={canonicalUrl} />
+          <link rel="alternate" hrefLang="x-default" href={xDefaultUrl} />
           <title>{`${feed.title ?? "Unnamed"} - ${siteName}`}</title>
           <meta property="og:site_name" content={siteName} />
           <meta property="og:title" content={feed.title ?? ""} />

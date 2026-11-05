@@ -203,13 +203,14 @@ async function generateFeed(env: Env, db: DB, frontendUrl: string, c?: AppContex
     }
     const faviconKey = getFaviconKey(env);
     const publicBaseUrl = frontendUrl || undefined;
+    const currentYear = new Date().getFullYear();
 
     let feedConfig: any = {
-        title: env.RSS_TITLE || env.NAME,
-        description: env.RSS_DESCRIPTION || env.DESCRIPTION || "Feed from Rin",
+        title: env.RSS_TITLE || env.NAME || "Agentic Life",
+        description: env.RSS_DESCRIPTION || env.DESCRIPTION || "Refactoring work. Automating life. Building in the open.",
         id: frontendUrl,
         link: frontendUrl,
-        copyright: "All rights reserved 2024",
+        copyright: `All rights reserved ${currentYear} Agentic Life`,
         updated: new Date(),
         generator: "Feed from Rin",
         feedLinks: {

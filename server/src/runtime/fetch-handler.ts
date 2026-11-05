@@ -98,7 +98,7 @@ function isPrerenderUserAgent(userAgent: string) {
 }
 
 async function tryServePrerenderedHtml(request: Request, env: Env, userAgent: string) {
-  if (request.method !== "GET") {
+  if (request.method !== "GET" && request.method !== "HEAD") {
     return null;
   }
 
@@ -130,6 +130,14 @@ async function tryServePrerenderedHtml(request: Request, env: Env, userAgent: st
   }
 
   newHeaders.set("X-Rin-Prerender", "HIT");
+
+  if (request.method === "HEAD") {
+    return new Response(null, {
+      status: asset.status,
+      headers: newHeaders,
+    });
+  }
+
   const html = await asset.text();
 
   return new Response(await normalizePrerenderedHtml(html, url, env), {
@@ -217,11 +225,18 @@ async function normalizePrerenderedHtml(html: string, requestUrl: URL, env: Env)
     normalized = normalized.replace(/\bhref=(["'])\/assets\/[^"']+\.css\1/gi, `href="${currentAssets.styleHref}"`);
   }
 
-  normalized = ensureHeadTag(
-    normalized,
-    `<link rel="canonical" href="${canonicalUrl}" data-seo-normalized="true">`,
-    /<link\b[^>]*rel=(["'])canonical\1/i,
-  );
+  if (/<link\b[^>]*\brel=(["'])canonical\1[^>]*>/i.test(normalized)) {
+    normalized = normalized.replace(
+      /<link\b[^>]*\brel=(["'])canonical\1[^>]*>/i,
+      `<link rel="canonical" href="${canonicalUrl}" data-seo-normalized="true">`
+    );
+  } else {
+    normalized = ensureHeadTag(
+      normalized,
+      `<link rel="canonical" href="${canonicalUrl}" data-seo-normalized="true">`,
+      /<link\b[^>]*rel=(["'])canonical\1/i,
+    );
+  }
 
   return stripCloudflareInsightsBeacon(normalized);
 }
